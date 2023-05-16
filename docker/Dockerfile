@@ -1,18 +1,21 @@
 FROM continuumio/miniconda3
+
 COPY adv_env.txt adv_env.txt
+
 RUN conda create --name adv_env --file adv_env.txt
 RUN pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
 RUN pip install accelerate
-RUN pip install transformers 
+RUN pip install transformers
 RUN pip install diffusers
 RUN pip install nltk
-RUN pip install gpytorch 
+RUN pip install gpytorch
 RUN pip install botorch
 RUN pip install wandb
-RUN pip install fire 
+RUN pip install fire
 RUN pip install matplotlib
 RUN pip install pandas
-# ENV WANDB_API_KEY=$YOUR_WANDB_API_KEY
+ENV WANDB_API_KEY=03c96127eab31e072ad04506df3933b5f0be28ad
+
 """ If you are using weights and biases (wandb) to track
     results, before building the container, 
     uncomment the line above add YOUR_WANDB_API_KEY 

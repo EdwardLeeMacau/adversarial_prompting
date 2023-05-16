@@ -5,9 +5,9 @@ from transformers import CLIPTextModel, CLIPTokenizer
 from diffusers import AutoencoderKL, UNet2DConditionModel, PNDMScheduler
 from torchvision import transforms
 from utils.objective import Objective
-import numpy as np 
-import pandas as pd 
-import sys 
+import numpy as np
+import pandas as pd
+import sys
 sys.path.append("../")
 from utils.imagenet_classes import load_imagenet
 from utils.constants import HUGGING_FACE_TOKEN
@@ -30,7 +30,7 @@ class ImageGenerationObjective(Objective):
         optimal_sub_classes=[],
         seed=1,
         similar_token_threshold=-3.0,
-        num_inference_steps=25, 
+        num_inference_steps=25,
         lb=None,
         ub=None,
         **kwargs,
@@ -42,15 +42,15 @@ class ImageGenerationObjective(Objective):
             lb=lb,
             ub=ub,
             **kwargs,
-        ) 
-        
+        )
+
         assert optimal_class_level in [1,2,3]
         if optimal_class_level == 1:
             optimal_sub_classes = [optimal_class]
-        assert len(optimal_sub_classes) > 0 
+        assert len(optimal_sub_classes) > 0
         self.optimal_class_level = optimal_class_level
         self.optimal_sub_classes = optimal_sub_classes
-        self.prepend_to_text = prepend_to_text 
+        self.prepend_to_text = prepend_to_text
         self.N_extra_prepend_tokens = len(self.prepend_to_text.split() )
 
         self.optimal_class = optimal_class
@@ -60,7 +60,7 @@ class ImageGenerationObjective(Objective):
         self.avg_over_N_latents = avg_over_N_latents # for use when use_fixed_latents==False,
         self.project_back = project_back
         self.n_tokens = n_tokens
-        self.minimize = minimize 
+        self.minimize = minimize
         self.batch_size = batch_size
         self.height = 512                        # default height of Stable Diffusion
         self.width = 512                         # default width of Stable Diffusion
@@ -68,13 +68,13 @@ class ImageGenerationObjective(Objective):
         self.guidance_scale = 7.5                # Scale for classifier-free guidance
         self.generator = torch.manual_seed(seed)   # Seed generator to create the inital latent noise
         self.max_num_tokens = (n_tokens + self.N_extra_prepend_tokens)*2  # maximum number of tokens in input, at most 75 and at least 1
-        self.dtype = torch.float16 
+        self.dtype = torch.float16
         self.torch_device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # 1. Load the autoencoder model which will be used to decode the latents into image space. 
+        # 1. Load the autoencoder model which will be used to decode the latents into image space.
         self.vae = AutoencoderKL.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="vae", torch_dtype=self.dtype, revision="fp16", use_auth_token=HUGGING_FACE_TOKEN)
 
-        # 2. Load the tokenizer and text encoder to tokenize and encode the text. 
+        # 2. Load the tokenizer and text encoder to tokenize and encode the text.
         self.tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14", torch_dtype=self.dtype)
         self.text_encoder = CLIPTextModel.from_pretrained("openai/clip-vit-large-patch14", torch_dtype=self.dtype)
         self.text_model = self.text_encoder.text_model
@@ -85,7 +85,7 @@ class ImageGenerationObjective(Objective):
         self.vae = self.vae.to(self.torch_device)
         self.text_encoder = self.text_encoder.to(self.torch_device)
         self.text_model = self.text_model.to(self.torch_device)
-        self.unet = self.unet.to(self.torch_device) 
+        self.unet = self.unet.to(self.torch_device)
 
         # Scheduler for noise in image
         self.scheduler = PNDMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", num_train_timesteps=1000, skip_prk_steps=True, steps_offset=1)
@@ -115,12 +115,12 @@ class ImageGenerationObjective(Objective):
             self.fixed_latents = torch.randn(
                 (1, 4, self.height // 8, self.width // 8),
                 generator=self.generator, dtype=self.dtype
-            ).to(self.torch_device) 
+            ).to(self.torch_device)
 
             self.fixed_latents = self.fixed_latents.repeat(self.batch_size, 1, 1, 1)
         else:
-            self.fixed_latents = None 
-        
+            self.fixed_latents = None
+
         self.vocab = self.tokenizer.get_vocab()
         self.reverse_vocab = {self.vocab[k]:k for k in self.vocab.keys() }
 
@@ -128,29 +128,29 @@ class ImageGenerationObjective(Objective):
             path = f"../data/high_similarity_tokens/{self.optimal_class}_high_similarity_tokens.csv"
             df = pd.read_csv(path)
             tokens = df['token'].values
-            losses = df['loss'].values 
-            self.related_vocab = tokens[losses >= similar_token_threshold].tolist() 
-            self.all_token_idxs = self.get_non_related_values() 
+            losses = df['loss'].values
+            self.related_vocab = tokens[losses >= similar_token_threshold].tolist()
+            self.all_token_idxs = self.get_non_related_values()
         else:
             self.all_token_idxs = list(self.vocab.values())
             self.related_vocab = []
-        self.all_token_embeddings = self.word_embedder(torch.tensor(self.all_token_idxs).to(self.torch_device)) 
-        self.search_space_dim = 768 # dim per token 
+        self.all_token_embeddings = self.word_embedder(torch.tensor(self.all_token_idxs).to(self.torch_device))
+        self.search_space_dim = 768 # dim per token
         self.dim = self.n_tokens*self.search_space_dim
         self.imagenet_class_to_ix, self.ix_to_imagenet_class = load_imagenet()
         self.optimal_class_idxs = []
         for cls in self.optimal_sub_classes:
-            class_ix = self.imagenet_class_to_ix[cls] 
-            self.optimal_class_idxs.append(class_ix) 
+            class_ix = self.imagenet_class_to_ix[cls]
+            self.optimal_class_idxs.append(class_ix)
 
     def get_non_related_values(self):
-        tmp = [] 
+        tmp = []
         for word in self.related_vocab:
             if type(word) == str:
                 tmp.append(word)
             else:
                 tmp.append(str(word))
-            # tmp.append(word+'</w>') 
+            # tmp.append(word+'</w>')
         self.related_vocab = tmp
         non_related_values = []
         for key in self.vocab.keys():
@@ -171,24 +171,24 @@ class ImageGenerationObjective(Objective):
 
     '''
         Preprocesses word embeddings
-        word_embeddings can have max_num_tokens or max_num_tokens + 2, either with or without the 
+        word_embeddings can have max_num_tokens or max_num_tokens + 2, either with or without the
         start-of-sentence and end-of-sentence tokens
         Will manually concatenate the correct SOS and EOS word embeddings if missing
-        
+
         In the setting where word_embed is fed from tokens_to_word_embed, the middle dimension will be
         max_num_tokens + 2
-        
+
         For manual optimization, suffices to only use dimension max_num_tokens to avoid redundancy
-        
-        args: 
-            word_embed: dtype pytorch tensor shape (batch_size, max_num_tokens, 768) 
-                        or (batch_size, max_num_tokens+2, 768) 
+
+        args:
+            word_embed: dtype pytorch tensor shape (batch_size, max_num_tokens, 768)
+                        or (batch_size, max_num_tokens+2, 768)
         returns:
             proc_word_embed: dtype pytorch tensor shape (batch_size, max_num_tokens+2, 768)
     '''
     def preprocess_word_embed(self, word_embed):
-            
-        # The first token dim is the start of text token and 
+
+        # The first token dim is the start of text token and
         # the last token dim is the end of text token
         # if word_embed is manually generated and missing these, we manually add it
         if word_embed.shape[1:] == (self.max_num_tokens, 768):
@@ -198,22 +198,22 @@ class ImageGenerationObjective(Objective):
                 [rep_uncond_embed[:,0:1,:],word_embed,rep_uncond_embed[:,-1:,:]],
                 dim = 1
             )
-        
+
         return word_embed
 
 
     '''
         Modified from https://github.com/huggingface/transformers/blob/v4.24.0/src/transformers/models/clip/modeling_clip.py#L611
-        args: 
+        args:
             proc_word_embed: dtype pytorch tensor shape (2, batch_size, max_num_tokens+2, 768)
         returns:
             CLIP_embed: dtype pytorch tensor shape (2, batch_size, max_num_tokens+2, 768)
     '''
-    def preprocessed_to_CLIP(self, proc_word_embed): 
+    def preprocessed_to_CLIP(self, proc_word_embed):
 
         # Hidden state from word embedding
         hidden_states = self.text_model.embeddings(inputs_embeds = proc_word_embed)
-        
+
         attention_mask = None
         output_attentions = None
         output_hidden_states = None
@@ -249,13 +249,13 @@ class ImageGenerationObjective(Objective):
             clip_embed: dtype pytorch tensor shape (batch_size, max_num_tokens + 2, 768)
         returns:
             images: array of PIL images
-        
+
     '''
     def CLIP_embed_to_image(self, clip_embed, fixed_latents = None):
         batch_size = clip_embed.shape[0]
         rep_uncond_embed = self.uncond_embed.repeat(batch_size, 1, 1)
 
-        # Concat unconditional and text embeddings, used for classifier-free guidance    
+        # Concat unconditional and text embeddings, used for classifier-free guidance
         clip_embed = torch.cat([rep_uncond_embed, clip_embed])
         if fixed_latents is not None:
             assert fixed_latents.shape == (batch_size, self.unet.in_channels, self.height // 8, self.width // 8)
@@ -270,7 +270,7 @@ class ImageGenerationObjective(Objective):
 
         scheduler.set_timesteps(self.num_inference_steps)
         latents = latents * scheduler.init_noise_sigma
-        
+
         # Diffusion process
         for t in tqdm(scheduler.timesteps):
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
@@ -288,7 +288,7 @@ class ImageGenerationObjective(Objective):
 
             # compute the previous noisy sample x_t -> x_t-1
             latents = scheduler.step(noise_pred, t, latents).prev_sample
-            
+
         # scale and decode the image latents with vae
         latents = 1 / 0.18215 * latents
         # Use vae to decode latents into image
@@ -316,10 +316,10 @@ class ImageGenerationObjective(Objective):
             output = self.resnet18(input_batch)
         # The output has unnormalized scores. To get probabilities, you can run a softmax on it.
         probabilities = torch.nn.functional.softmax(output, dim=1)
-        # probabilities.shape = (bsz,1000) = (bsz,n_imagenet_classes) 
+        # probabilities.shape = (bsz,1000) = (bsz,n_imagenet_classes)
         most_probable_classes = torch.argmax(probabilities, dim=-1) # (bsz,)
         self.most_probable_classes_batch = [self.ix_to_imagenet_class[ix.item()] for ix in most_probable_classes]
-        # prob of max prob class of all optimal class options! 
+        # prob of max prob class of all optimal class options!
         total_probs = torch.max(probabilities[:,self.optimal_class_idxs], dim=1).values # classes 281:282 are HOUSE cat classes
         # total_cat_probs = torch.max(probabilities[:,281:286], dim = 1).values # classes 281:286 are cat classes
         #total_dog_probs = torch.sum(probabilities[:,151:268], dim = 1) # classes 151:268 are dog classes
@@ -330,7 +330,7 @@ class ImageGenerationObjective(Objective):
 
     '''
         Pipeline order
-        prompt -> tokens -> word_embedding -> processed_word_embedding -> 
+        prompt -> tokens -> word_embedding -> processed_word_embedding ->
         CLIP_embedding -> image -> loss
 
         Function that accepts intermediary values in the pipeline and outputs downstream values
@@ -349,13 +349,13 @@ class ImageGenerationObjective(Objective):
             if cur_output_type not in valid_output_types:
                 raise ValueError(f"output_type must be one of {valid_output_types} but was {cur_output_type}")
         # Check that output is downstream
-        pipeline_order = ["prompt", "tokens", "word_embedding", "processed_word_embedding", 
+        pipeline_order = ["prompt", "tokens", "word_embedding", "processed_word_embedding",
                         "CLIP_embedding", "image","loss"]
         pipeline_maps = {"prompt": self.prompt_to_token,
                         "tokens": self.tokens_to_word_embed,
-                        "word_embedding": self.preprocess_word_embed, 
-                        "processed_word_embedding": self.preprocessed_to_CLIP, 
-                        "CLIP_embedding": self.CLIP_embed_to_image, 
+                        "word_embedding": self.preprocess_word_embed,
+                        "processed_word_embedding": self.preprocessed_to_CLIP,
+                        "CLIP_embedding": self.CLIP_embed_to_image,
                         "image": self.image_to_loss}
 
         start_index = pipeline_order.index(input_type)
@@ -371,7 +371,7 @@ class ImageGenerationObjective(Objective):
             if input_value.shape[1:] != (self.max_num_tokens, 768):
                 raise ValueError(f"Word embeddings are the incorrect size, \
                     should be (batch_size, {self.max_num_tokens}, 768) but were {input_value.shape}")
-        elif input_type == "CLIP_embedding": 
+        elif input_type == "CLIP_embedding":
             if input_value.shape[1:] != (self.max_num_tokens+2, 768):
                 raise ValueError(f"CLIP embeddings are the incorrect size, \
                     should be (batch_size, {self.max_num_tokens+2}, 768) but were {input_value.shape}")
@@ -393,84 +393,84 @@ class ImageGenerationObjective(Objective):
     def query_oracle(self, x, return_img=False):
         if not torch.is_tensor(x):
             x = torch.tensor(x, dtype=torch.float16)
-        x = x.cuda() 
-        x = x.reshape(-1, self.n_tokens, self.search_space_dim) 
+        x = x.cuda()
+        x = x.reshape(-1, self.n_tokens, self.search_space_dim)
         out_types = ["loss"]
         if return_img:
             out_types = ["image", "loss"]
-        
+
         input_type = "word_embedding"
         if self.project_back:
             x = self.proj_word_embedding(x)
             input_type = "prompt"
-            x = [x1[0] for x1 in x] 
+            x = [x1[0] for x1 in x]
 
-        if self.fixed_latents is None: # not using fixed latents... 
-            ys = [] 
+        if self.fixed_latents is None: # not using fixed latents...
+            ys = []
             imgs_per_latent = [] ## N latents x bsz : [ [latent 0, bsz imgs ], [latent 1, bsz imgs], ..., [latent N bsz imgs]]
-            most_likely_classes_per_latent = [] # 
+            most_likely_classes_per_latent = [] #
             for _ in range(self.avg_over_N_latents):
-                # import time 
-                # start_time = time.time() 
+                # import time
+                # start_time = time.time()
                 out_dict = self.pipeline(
                     input_type=input_type,
-                    input_value=x, 
+                    input_value=x,
                     output_types=out_types,
                     fixed_latents=self.fixed_latents
                 )
                 y = out_dict['loss']
-                ys.append(y.unsqueeze(0)) 
+                ys.append(y.unsqueeze(0))
                 most_likely_classes_per_latent.append(self.most_probable_classes_batch)
                 if return_img:
-                    imgs = out_dict["image"] 
-                    imgs_per_latent.append(imgs) 
-            ys = torch.cat(ys) # torch.Size([N_latents, bsz]) 
-            y = ys.mean(0) # (bsz,) 
+                    imgs = out_dict["image"]
+                    imgs_per_latent.append(imgs)
+            ys = torch.cat(ys) # torch.Size([N_latents, bsz])
+            y = ys.mean(0) # (bsz,)
             self.most_probable_classes = []
             self.prcnts_correct_class = []
             for i in range(self.batch_size):
                 most_likely_cls_form_xi = []
                 for clss_for_latent in most_likely_classes_per_latent:
-                    most_likely_cls_form_xi.append(clss_for_latent[i]) 
+                    most_likely_cls_form_xi.append(clss_for_latent[i])
                 mode_most_likely_class = max(set(most_likely_cls_form_xi), key=most_likely_cls_form_xi.count)
-                self.most_probable_classes.append(mode_most_likely_class) # in self.optimal_sub_classes 
+                self.most_probable_classes.append(mode_most_likely_class) # in self.optimal_sub_classes
                 prcnt_correct_class = [clas in self.optimal_sub_classes for clas in most_likely_cls_form_xi]
                 prcnt_correct_class = np.array(prcnt_correct_class).sum() / len(most_likely_cls_form_xi)
-                self.prcnts_correct_class.append(prcnt_correct_class) # % of latents --> correct class 
+                self.prcnts_correct_class.append(prcnt_correct_class) # % of latents --> correct class
             if return_img:
                 imgs = [] # bsz x N latents: [ [latent 0, latent 1, ...], [latent 0, latent 1, ...],, ..., [latent 0, latent 1, ...],]
                 for i in range(self.batch_size):
-                    imgs_from_xi = [] 
+                    imgs_from_xi = []
                     for ims_per_latent in imgs_per_latent:
                         imgs_from_xi.append(ims_per_latent[i])
                     imgs.append(imgs_from_xi)
         else:
             out_dict = self.pipeline(
                 input_type=input_type,
-                input_value=x, 
+                input_value=x,
                 output_types=out_types,
                 fixed_latents=self.fixed_latents
             )
-            self.most_probable_classes = self.most_probable_classes_batch 
+            self.most_probable_classes = self.most_probable_classes_batch
             self.prcnts_correct_class = [clas in self.optimal_sub_classes for clas in self.most_probable_classes_batch]
             # self.prcnts_correct_class = (np.array(self.most_probable_classes_batch) == self.optimal_class).tolist()
-            y = out_dict['loss'] 
+            y = out_dict['loss']
             if return_img:
-                imgs = out_dict["image"] 
-        if self.minimize: 
-            y = y*-1 
+                imgs = out_dict["image"]
+        if self.minimize:
+            y = y*-1
         if return_img:
             return imgs, x, y # return x becaausee w/ proj back it is the closeest! prompt
-        return x, y 
-    
+        return x, y
+
     def get_init_word_embeddings(self, prompts):
         # Word embedding initialization at "cow"
-        # promts = list of words, ie ["cow", "horse", "cat"] 
+        # promts = list of words, ie ["cow", "horse", "cat"]
         word_embeddings =self.pipeline(
-            input_type="prompt", 
-            input_value=prompts, 
+            input_type="prompt",
+            input_value=prompts,
             output_types = ["word_embedding"]
-        )["word_embedding"][:,1:-1,:] 
+        )["word_embedding"][:,1:-1,:]
         # if self.N_extra_prepend_tokens > 0:
         #     word_embeddings = word_embeddings[:, 0:self.n_tokens, :]
         word_embeddings = word_embeddings[:, 0:self.n_tokens, :]
@@ -496,12 +496,12 @@ class ImageGenerationObjective(Objective):
             closest_tokens = torch.argmin(dists, axis = 0)
             closest_tokens = torch.tensor([self.all_token_idxs[token] for token in closest_tokens]).to(self.torch_device)
             closest_vocab = self.tokenizer.decode(closest_tokens)
-            if self.prepend_to_text: 
-                closest_vocab = closest_vocab + " " + self.prepend_to_text + " <|endoftext|>" 
+            if self.prepend_to_text:
+                closest_vocab = closest_vocab + " " + self.prepend_to_text + " <|endoftext|>"
             cur_proj_tokens = [closest_vocab]
-            proj_tokens.append(cur_proj_tokens) 
+            proj_tokens.append(cur_proj_tokens)
 
         return proj_tokens
 
-    
+
 
