@@ -1,18 +1,24 @@
 """ Trust Region for Bayesian Optimization """
 
 import math
-import torch
 from dataclasses import dataclass
-from torch.quasirandom import SobolEngine
+
+import torch
 from botorch.acquisition import qExpectedImprovement
 from botorch.optim import optimize_acqf
+from torch.quasirandom import SobolEngine
+
 try:
     from botorch.generation import MaxPosteriorSampling
 except:
     from .bo_torch_sampling import MaxPosteriorSampling
-from typing import Any
-# based on TuRBO State from BoTorch
 
+from typing import Any
+
+from utils.bo_utils.ppgpr import GPModelDKL
+
+
+# based on TuRBO State from BoTorch
 @dataclass
 class TrustRegionState:
     dim: int
@@ -54,8 +60,8 @@ def update_state(state: TrustRegionState, Y_next):
 
 
 def generate_batch(
-    state,
-    model,  # GP model
+    state: TrustRegionState,
+    model: GPModelDKL,  # GP model
     X,  # Evaluated points
     Y,  # Evaluated scores
     batch_size,
@@ -67,6 +73,10 @@ def generate_batch(
     device=torch.device('cuda'),
     absolute_bounds=None,
 ):
+    """
+    acqf: str
+        acquisition function, ts: ThompsonSampling, ei: qExpectedImprovement
+    """
     assert acqf in ("ts", "ei")
     assert torch.all(torch.isfinite(Y))
     if n_candidates is None: n_candidates = min(5000, max(2000, 200 * X.shape[-1]))

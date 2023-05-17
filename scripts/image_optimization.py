@@ -1,32 +1,34 @@
-import torch
-import gpytorch
-import numpy as np
-import sys
-import copy
-sys.path.append("../")
-from gpytorch.mlls import PredictiveLogLikelihood
-from utils.bo_utils.trust_region import (
-    TrustRegionState,
-    generate_batch,
-    update_state
-)
-from utils.bo_utils.ppgpr import (
-    GPModelDKL,
-)
-from torch.utils.data import (
-    TensorDataset,
-    DataLoader
-)
-from utils.imagenet_classes import get_imagenet_sub_classes
-from utils.objectives.image_generation_objective import ImageGenerationObjective
 import argparse
-import wandb
+import copy
 import math
 import os
+import sys
+
+import gpytorch
+import numpy as np
+import pysnooper
+import torch
+
+sys.path.append("../") # To include utils from parent directory
+
+import wandb
+from gpytorch.mlls import PredictiveLogLikelihood
+from torch.utils.data import DataLoader, TensorDataset
+
+from utils.bo_utils.ppgpr import GPModelDKL
+from utils.bo_utils.trust_region import (TrustRegionState, generate_batch,
+                                         update_state)
+from utils.imagenet_classes import get_imagenet_sub_classes
+from utils.objectives.image_generation_objective import \
+    ImageGenerationObjective
+
 os.environ["WANDB_SILENT"] = "true"
 import random
-from utils.constants import PREPEND_TASK_VERSIONS
+
 from tracker import Tracker
+
+from utils.constants import PREPEND_TASK_VERSIONS
+
 
 class RunTurbo():
     def __init__(self, args):
@@ -74,20 +76,18 @@ class RunTurbo():
             torch.backends.cudnn.deterministic = True
             os.environ["PYTHONHASHSEED"] = str(seed)
 
+    @pysnooper.snoop()
     def update_surr_model(
-        self,
-        model,
-        learning_rte,
-        train_z,
-        train_y,
-        n_epochs
+        self, model, learning_rte, train_z, train_y, n_epochs
     ):
+        """ progressively update model for estimator function: p(y*|x*, D) """
         model = model.train()
         mll = PredictiveLogLikelihood(model.likelihood, model, num_data=train_z.shape[0] )
-        optimizer = torch.optim.Adam([{'params': model.parameters(), 'lr': learning_rte} ], lr=learning_rte)
-        train_bsz = min(len(train_y),128)
+        optimizer = torch.optim.Adam([{'params': model.parameters(), 'lr': learning_rte}], lr=learning_rte)
+        train_bsz = min(len(train_y), 128)
         train_dataset = TensorDataset(train_z.cuda(), train_y.cuda())
         train_loader = DataLoader(train_dataset, batch_size=train_bsz, shuffle=True)
+
         for _ in range(n_epochs):
             for (inputs, scores) in train_loader:
                 optimizer.zero_grad()
@@ -96,6 +96,7 @@ class RunTurbo():
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
+
         model = model.eval()
         return model
 
@@ -158,9 +159,10 @@ class RunTurbo():
 
         return prompts
 
-    def get_init_data(self ):
+    def get_init_data(self):
         # get scores for baseline_prompts
         self.log_baseline_prompts()
+
         # then get initialization prompts + scores ...
         prompts = self.get_init_prompts()
         YS = []
@@ -193,11 +195,13 @@ class RunTurbo():
         self.args.most_probable_clss = most_probable_clss
         self.args.prcnt_correct_clss = prcnt_correct_clss
 
+    @pysnooper.snoop()
     def log_baseline_prompts(self):
         baseline_prompts = self.get_baseline_prompts()
         while (len(baseline_prompts) % self.args.bsz) != 0:
             baseline_prompts.append(baseline_prompts[0])
-        n_batches = int(len(baseline_prompts) / self.args.bsz )
+
+        n_batches = int(len(baseline_prompts) / self.args.bsz)
         baseline_scores = []
         out_baseline_prompts = []
         baseline_most_probable_clss = []
@@ -216,15 +220,16 @@ class RunTurbo():
         baseline_scores = torch.cat(baseline_scores).detach().cpu() # self.best_baseline_score
         self.best_baseline_score = baseline_scores.max().item()
         best_score_idx = torch.argmax(baseline_scores).item()
+
         self.tracker.log({
-            "baseline_scores":baseline_scores.tolist(),
-            "baseline_prompts":out_baseline_prompts,
-            "baseline_most_probable_classes":baseline_most_probable_clss,
-            "baseline_prcnt_latents_correct_class_most_probables":baseline_prcnt_correct_clss,
-            "best_baseline_score":self.best_baseline_score,
-            "best_baseline_prompt":out_baseline_prompts[best_score_idx],
-            "best_baseline_most_probable_class":baseline_most_probable_clss[best_score_idx],
-            "best_baseline_prcnt_latents_correct_class_most_probable":baseline_prcnt_correct_clss[best_score_idx],
+            "baseline_scores": baseline_scores,
+            "baseline_prompts": out_baseline_prompts,
+            "baseline_most_probable_classes": baseline_most_probable_clss,
+            "baseline_prcnt_latents_correct_class_most_probables": baseline_prcnt_correct_clss,
+            "best_baseline_score": self.best_baseline_score,
+            "best_baseline_prompt": out_baseline_prompts[best_score_idx],
+            "best_baseline_most_probable_class": baseline_most_probable_clss[best_score_idx],
+            "best_baseline_prcnt_latents_correct_class_most_probable": baseline_prcnt_correct_clss[best_score_idx],
         })
 
     def save_stuff(self ):
@@ -236,7 +241,9 @@ class RunTurbo():
         C = self.args.most_probable_clss
         PRC = self.args.prcnt_correct_clss
         best_prompt = P[Y.argmax()]
-        self.tracker.log({"best_prompt":best_prompt})
+        self.tracker.log({
+            "best_prompt": best_prompt
+        })
         print(f"Best score found: {self.args.Y.max().item()}")
         print(f"Best prompt found: {best_prompt} \n")
         print("")
@@ -254,12 +261,16 @@ class RunTurbo():
         # df["loss"] = Y.squeeze().detach().cpu().numpy()
         # df.to_csv(save_path, index=None)
 
+    # @pysnooper.snoop()
     def init_args(self):
         self.args.n_init_per_prompt = 10
+
         if not self.args.prepend_task:
             self.args.prepend_to_text = ""
+
         self.args.lb = None
         self.args.ub = None
+
         # flags for wandb recording
         self.args.update_state_fix = True
         self.args.update_state_fix2 = True
@@ -270,6 +281,7 @@ class RunTurbo():
         self.args.flag_fix_args_reset = True
         self.args.flag_reset_gp_new_data = True # reset gp every 10 iters up to 1024 data points
         self.args.n_init_pts = self.args.bsz * self.args.n_init_per_prompt
+
         assert self.args.n_init_pts % self.args.bsz == 0
 
     def call_oracle_and_update_next(self, x_next):
@@ -375,6 +387,7 @@ class RunTurbo():
         else:
             self.optimize()
 
+    @pysnooper.snoop()
     def optimize(self):
         """
         If --square_attack is not set, run this optimization function by default.
@@ -426,15 +439,16 @@ class RunTurbo():
         print("Starting main optimization loop")
         while self.args.objective.num_calls < self.args.max_n_calls:
             self.tracker.log({
-                'num_calls':self.args.objective.num_calls,
-                'best_y':self.args.Y.max(),
-                'best_x':self.args.X[self.args.Y.argmax(), :].squeeze().tolist(),
-                'tr_length':tr.length,
-                'tr_success_counter':tr.success_counter,
-                'tr_failure_counter':tr.failure_counter,
-                'num_tr_restarts':num_tr_restarts,
-                "beat_best_baseline":self.beat_best_baseline,
+                'num_calls': self.args.objective.num_calls,
+                'best_y': self.args.Y.max(),
+                'best_x': self.args.X[self.args.Y.argmax(), :].squeeze().tolist(),
+                'tr_length': tr.length,
+                'tr_success_counter': tr.success_counter,
+                'tr_failure_counter': tr.failure_counter,
+                'num_tr_restarts': num_tr_restarts,
+                "beat_best_baseline": self.beat_best_baseline,
             } )
+
             if self.args.Y.max().item() > prev_best:
                 n_calls_without_progress = 0
                 prev_best = self.args.Y.max().item()

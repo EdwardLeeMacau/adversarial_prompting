@@ -1,20 +1,19 @@
-
-import torch
-import numpy as np
 import argparse
-import wandb
+import copy
 import math
 import os
-import pandas as pd
-import copy
 import sys
-sys.path.append("../")
+
+import numpy as np
+import pandas as pd
+import pysnooper
+import torch
+import wandb
+
+sys.path.append("../") # Support load module script from current directory
+from scripts.image_optimization import RunTurbo, tuple_type
 from utils.objectives.text_generation_objective import TextGenerationObjective
-os.environ["WANDB_SILENT"] = "true"
-from scripts.image_optimization import (
-    RunTurbo,
-    tuple_type,
-)
+
 
 class OptimizeText(RunTurbo):
     """
@@ -25,7 +24,12 @@ class OptimizeText(RunTurbo):
     def __init__(self, args):
         self.args = args
 
+    # @pysnooper.snoop()
     def get_baseline_prompts(self):
+        """
+        This function returns some prompts crafted manually.
+        We expect that the attacker finds a better prompts to manually crafted prompts.
+        """
         ## ** , here we maximize this "loss" !
         if self.args.loss_type not in ["log_prob_neg", "log_prob_pos"]:
             target_str = self.args.target_string # perc_target, num_target, "target_occurrences"
@@ -61,13 +65,18 @@ class OptimizeText(RunTurbo):
 
         return prompts
 
+    # @pysnooper.snoop()
     def log_baseline_prompts(self):
+        # Get manually crafted prompts as baseline value.
+        # Prompts optimized from TuRBO should be better than this one.
         baseline_prompts = self.get_baseline_prompts()
         while (len(baseline_prompts) % self.args.bsz) != 0:
             baseline_prompts.append(baseline_prompts[0])
-        n_batches = int(len(baseline_prompts) / self.args.bsz )
+
+        n_batches = int(len(baseline_prompts) / self.args.bsz)
         baseline_scores = []
         baseline_gen_text = []
+
         for i in range(n_batches):
             prompt_batch = baseline_prompts[i*self.args.bsz:(i+1)*self.args.bsz]
             out_dict = self.args.objective.pipe(
@@ -75,7 +84,7 @@ class OptimizeText(RunTurbo):
                 input_value=prompt_batch,
                 output_types=['generated_text','loss']
             )
-            ys = out_dict['loss'].mean(-1 )
+            ys = out_dict['loss'].mean(-1)
             gen_text = out_dict["generated_text"]
             baseline_scores.append(ys)
             baseline_gen_text = baseline_gen_text + gen_text
@@ -84,32 +93,38 @@ class OptimizeText(RunTurbo):
         self.best_baseline_score = baseline_scores.max().item()
         best_score_idx = torch.argmax(baseline_scores).item()
         self.tracker.log({
-            "baseline_scores":baseline_scores.tolist(),
-            "baseline_prompts":baseline_prompts,
-            "baseline_gen_text":baseline_gen_text,
-            "best_baseline_score":self.best_baseline_score,
-            "best_baseline_prompt":baseline_prompts[best_score_idx],
-            "best_baseline_gen_text":baseline_gen_text[best_score_idx],
+            "baseline_scores": baseline_scores.tolist(),
+            "baseline_prompts": baseline_prompts,
+            "baseline_gen_text": baseline_gen_text,
+            "best_baseline_score": self.best_baseline_score,
+            "best_baseline_prompt": baseline_prompts[best_score_idx],
+            "best_baseline_gen_text": baseline_gen_text[best_score_idx],
         })
+
         self.prcnt_latents_correct_class_most_probable = 1.0 # for compatibility with image gen task
 
-    def get_init_data(self,):
+    # @pysnooper.snoop()
+    def get_init_data(self):
         # get scores for baseline_prompts
         self.log_baseline_prompts()
+
         # initialize random starting data
-        YS = []
-        XS = []
-        PS = []
-        GS = []
+        YS = [] # scores
+        XS = [] # embedding vectors
+        PS = [] # prompts
+        GS = [] # generated text
+
         # if do batches of more than 10, get OOM
         n_batches = math.ceil(self.args.n_init_pts / self.args.bsz)
         for ix in range(n_batches):
-            X = torch.randn(self.args.bsz, self.args.objective.dim )*0.01
+            X = torch.randn(self.args.bsz, self.args.objective.dim) * 0.01
             XS.append(X)
+
             prompts, ys, gen_text = self.args.objective(X.to(torch.float16))
             YS.append(ys)
             PS = PS + prompts
             GS = GS + gen_text
+
         Y = torch.cat(YS).detach().cpu()
         self.args.X = torch.cat(XS).float().detach().cpu()
         self.args.Y = Y.unsqueeze(-1)

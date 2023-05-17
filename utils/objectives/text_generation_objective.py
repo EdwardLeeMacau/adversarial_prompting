@@ -1,12 +1,17 @@
-from transformers import GPT2Tokenizer, OPTModel, pipeline
-from transformers import DistilBertTokenizer, DistilBertForSequenceClassification
-import torch
 import sys
+
+import pysnooper
+import torch
+from transformers import (DistilBertForSequenceClassification,
+                          DistilBertTokenizer, GPT2Tokenizer, OPTModel,
+                          pipeline)
+
 sys.path.append("../")
 from utils.objective import Objective
 
 
 class TextGenerationObjective(Objective):
+    # @pysnooper.snoop()
     def __init__(
         self,
         num_calls=0,
@@ -25,14 +30,11 @@ class TextGenerationObjective(Objective):
         **kwargs,
     ):
         super().__init__(
-            num_calls=num_calls,
-            task_id='adversarial4',
-            dim=n_tokens*768,
-            lb=lb,
-            ub=ub,
-            **kwargs,
+            num_calls=num_calls, task_id='adversarial4', dim=n_tokens*768, lb=lb, ub=ub, **kwargs,
         )
+
         assert dist_metric in ['cosine_sim', "sq_euclidean"]
+        assert not minimize
 
         # TODO: Extend here to attack other models
         # find models here: https://huggingface.co/models?sort=downloads&search=facebook%2Fopt
@@ -52,7 +54,7 @@ class TextGenerationObjective(Objective):
         self.target_string = target_string
         self.loss_type = loss_type
         self.prepend_to_text = prepend_to_text
-        self.N_extra_prepend_tokens = len(self.prepend_to_text.split() )
+        self.N_extra_prepend_tokens = len(self.prepend_to_text.split())
         self.dist_metric = dist_metric
         self.torch_device = "cuda" if torch.cuda.is_available() else "cpu"
         self.tokenizer = GPT2Tokenizer.from_pretrained(model_string)
@@ -68,8 +70,13 @@ class TextGenerationObjective(Objective):
         self.generator = pipeline("text-generation", model=model_string)
         self.model = OPTModel.from_pretrained(model_string)
         self.model = self.model.to(self.torch_device)
+
+        # get embedded vectors and supported vocab here.
+        # we do not know the exact word embedding and vocab set when attacking GPT-4,
+        # thus we need to "guess" it. (consider transferability)
         self.word_embedder = self.model.get_input_embeddings()
         self.vocab = self.tokenizer.get_vocab()
+
         self.num_gen_seq = num_gen_seq
         self.max_gen_length = max_gen_length + n_tokens + self.N_extra_prepend_tokens
 
@@ -78,16 +85,21 @@ class TextGenerationObjective(Objective):
             self.all_token_idxs = self.get_non_related_values()
         else:
             self.all_token_idxs = list(self.vocab.values())
+
         self.all_token_embeddings = self.word_embedder(torch.tensor(self.all_token_idxs).to(self.torch_device))
         self.all_token_embeddings_norm = self.all_token_embeddings / self.all_token_embeddings.norm(dim=-1, keepdim=True)
         self.n_tokens = n_tokens
         self.minmize = minimize
         self.batch_size = batch_size
-        assert not minimize
+
         self.search_space_dim = 768
-        self.dim = self.n_tokens*self.search_space_dim
+        self.dim = self.n_tokens * self.search_space_dim
 
     def get_non_related_values(self):
+        """
+        Consider prompting the LM to generate sentences with specific words or letters.
+        This function collect the words supported by LM, that do not have the target string in it.
+        """
         tmp = []
         for word in self.related_vocab:
             tmp.append(word)
