@@ -3,6 +3,7 @@
 import math
 from dataclasses import dataclass
 
+import pysnooper
 import torch
 from botorch.acquisition import qExpectedImprovement
 from botorch.optim import optimize_acqf
@@ -37,6 +38,7 @@ class TrustRegionState:
     #         max([4.0 / self.batch_size, float(self.dim ) / self.batch_size])
     #     )
 
+@pysnooper.snoop()
 def update_state(state: TrustRegionState, Y_next):
     if max(Y_next) > state.best_value + 1e-3 * math.fabs(state.best_value):
         state.success_counter += 1

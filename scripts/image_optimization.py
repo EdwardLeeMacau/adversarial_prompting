@@ -76,7 +76,7 @@ class RunTurbo():
             torch.backends.cudnn.deterministic = True
             os.environ["PYTHONHASHSEED"] = str(seed)
 
-    @pysnooper.snoop()
+    # @pysnooper.snoop()
     def update_surr_model(
         self, model, learning_rte, train_z, train_y, n_epochs
     ):
@@ -513,6 +513,9 @@ class RunTurbo():
                     n_epochs=self.args.n_epochs
                 )
             n_iters += 1
+
+            raise NotImplementedError("TODO: Check the meaning of loop first.")
+
         self.tracker.finish()
 
 def tuple_type(strings):

@@ -139,10 +139,17 @@ class OptimizeText(RunTurbo):
         G = self.args.G
         # best_x = X[Y.argmax(), :].squeeze().to(torch.float16)
         # torch.save(best_x, f"../best_xs/{wandb.run.name}-best-x.pt")
+
         best_prompt = P[Y.argmax()]
-        self.tracker.log({"best_prompt":best_prompt})
+        self.tracker.log({
+            "best_prompt": best_prompt
+        })
+
         best_gen_text = G[Y.argmax()]
-        self.tracker.log({"best_gen_text":best_gen_text})
+        self.tracker.log({
+            "best_gen_text": best_gen_text
+        })
+
         # save_path = f"../best_xs/{wandb.run.name}-all-data.csv"
         # prompts_arr = np.array(P)
         # loss_arr = Y.squeeze().detach().cpu().numpy()
