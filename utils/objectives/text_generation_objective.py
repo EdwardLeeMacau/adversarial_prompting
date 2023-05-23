@@ -51,6 +51,7 @@ class TextGenerationObjective(Objective):
         else:
             assert 0
 
+
         self.target_string = target_string
         self.loss_type = loss_type
         self.prepend_to_text = prepend_to_text
@@ -67,7 +68,16 @@ class TextGenerationObjective(Objective):
         self.distilBert_tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english")
         self.distilBert_model = DistilBertForSequenceClassification.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english")
 
+        # <transformers.pipelines.text_generation.TextGenerationPipeline object at 0x7f92b342dfa0>
         self.generator = pipeline("text-generation", model=model_string)
+
+        """
+        FIXME: Check if this log is abnormal to us.
+
+        Some weights of the model checkpoint at facebook/opt-125m were not used when initializing OPTModel: ['lm_head.weight']
+        - This IS expected if you are initializing OPTModel from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).
+        - This IS NOT expected if you are initializing OPTModel from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).
+        """
         self.model = OPTModel.from_pretrained(model_string)
         self.model = self.model.to(self.torch_device)
 

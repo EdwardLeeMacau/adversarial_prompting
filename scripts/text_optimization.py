@@ -92,14 +92,23 @@ class OptimizeText(RunTurbo):
         baseline_scores = torch.cat(baseline_scores).detach().cpu() # self.best_baseline_score
         self.best_baseline_score = baseline_scores.max().item()
         best_score_idx = torch.argmax(baseline_scores).item()
-        self.tracker.log({
-            "baseline_scores": baseline_scores.tolist(),
-            "baseline_prompts": baseline_prompts,
-            "baseline_gen_text": baseline_gen_text,
-            "best_baseline_score": self.best_baseline_score,
-            "best_baseline_prompt": baseline_prompts[best_score_idx],
-            "best_baseline_gen_text": baseline_gen_text[best_score_idx],
-        })
+
+        # Rewrite this log function by tensorboard SummaryWriter
+        # The extra 2 space in the string is for the markdown newline
+        # See: https://stackoverflow.com/questions/45016458/tensorflow-tf-summary-text-and-linebreaks
+        self.tracker.writer.add_text('adversarial',
+            f"{self.best_baseline_score:.4f}  \n" + '  \n'.join(baseline_gen_text[best_score_idx]), 0
+        )
+
+        # Uncomment these lines to see what's log in origin code base.
+        # self.tracker.log({
+        #     "baseline_scores": baseline_scores.tolist(),
+        #     "baseline_prompts": baseline_prompts,
+        #     "baseline_gen_text": baseline_gen_text,
+        #     "best_baseline_score": self.best_baseline_score,
+        #     "best_baseline_prompt": baseline_prompts[best_score_idx],
+        #     "best_baseline_gen_text": baseline_gen_text[best_score_idx],
+        # })
 
         self.prcnt_latents_correct_class_most_probable = 1.0 # for compatibility with image gen task
 
@@ -141,25 +150,19 @@ class OptimizeText(RunTurbo):
         # torch.save(best_x, f"../best_xs/{wandb.run.name}-best-x.pt")
 
         best_prompt = P[Y.argmax()]
-        self.tracker.log({
-            "best_prompt": best_prompt
-        })
+        # self.tracker.log({
+        #     "best_prompt": best_prompt
+        # })
 
         best_gen_text = G[Y.argmax()]
-        self.tracker.log({
-            "best_gen_text": best_gen_text
-        })
+        # self.tracker.log({
+        #     "best_gen_text": best_gen_text
+        # })
 
-        # save_path = f"../best_xs/{wandb.run.name}-all-data.csv"
-        # prompts_arr = np.array(P)
-        # loss_arr = Y.squeeze().detach().cpu().numpy()
-        # gen_text_arr = np.array(G)  # (10, 5)  = N, n_gen_text
-        # df = pd.DataFrame()
-        # df['prompt'] = prompts_arr
-        # df["loss"] = loss_arr
-        # for i in range(gen_text_arr.shape[-1]):
-        #     df[f"gen_text{i+1}"] = gen_text_arr[:,i]
-        # df.to_csv(save_path, index=None)
+        # self.tracker.writer.add_text('best-prompt', best_prompt, self.args.objective.num_calls)
+        self.tracker.writer.add_text('adversarial',
+            '  \n'.join(best_gen_text), self.args.objective.num_calls
+        )
 
     def call_oracle_and_update_next(self, x_next):
         p_next, y_next, g_next = self.args.objective(x_next.to(torch.float16))
@@ -199,14 +202,19 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=1 )
     parser.add_argument('--success_value', type=int, default=8)
     parser.add_argument('--break_after_success', type=bool, default=False)
-    parser.add_argument('--max_n_calls', type=int, default=3000)
+
+    # Increase to 10000 to see what will happen when attacker has more attack budgets,
+    # default number is 3000.
+    parser.add_argument('--max_n_calls', type=int, default=10000 )
     parser.add_argument('--num_gen_seq', type=int, default=5 )
     parser.add_argument('--max_gen_length', type=int, default=20 )
     parser.add_argument('--dist_metric', default="sq_euclidean" )
     parser.add_argument('--n_tokens', type=int, default=4 )
     parser.add_argument('--failure_tolerance', type=int, default=32 )
     parser.add_argument('--success_tolerance', type=int, default=10 )
-    parser.add_argument('--max_allowed_calls_without_progress', type=int, default=1000 ) # for square baseline!
+
+    # Increased to 3000 to see what will happen without early-stop, default number is 1000.
+    parser.add_argument('--max_allowed_calls_without_progress', type=int, default=10000 ) # for square baseline!
     parser.add_argument('--text_gen_model', default="opt" )
     parser.add_argument('--square_attack', type=bool, default=False)
     parser.add_argument('--bsz', type=int, default=10)
@@ -217,10 +225,12 @@ if __name__ == "__main__":
     parser.add_argument('--wandb_entity', default="nmaus" )
     parser.add_argument('--wandb_project_name', default="prompt-optimization-text" )
     args = parser.parse_args()
+
     if args.loss_type == "log_prob_neg":
         args.prepend_to_text = "I am happy"
     elif args.loss_type == "log_prob_pos":
         args.prepend_to_text = "I am sad"
+
     assert args.text_gen_model in ["gpt2", "opt", "opt350", "opt13b", "opt66b"]
 
     runner = OptimizeText(args)

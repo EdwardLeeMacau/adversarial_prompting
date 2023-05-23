@@ -3,11 +3,15 @@ import copy
 import math
 import os
 import sys
+from copy import deepcopy
+from datetime import datetime
+from typing import Dict
 
 import gpytorch
 import numpy as np
 import pysnooper
 import torch
+from tqdm import tqdm
 
 sys.path.append("../") # To include utils from parent directory
 
@@ -51,6 +55,7 @@ class RunTurbo():
 
     def start_wandb(self):
         args_dict = vars(self.args)
+
         # self.tracker = wandb.init(
         self.tracker = Tracker.init(
             entity=args_dict['wandb_entity'],
@@ -58,6 +63,8 @@ class RunTurbo():
             config=args_dict,
         )
         # print('running', wandb.run.name)
+
+        self.start_time = datetime.now()
 
     def set_seed(self):
         # The flag below controls whether to allow TF32 on matmul. This flag defaults to False
@@ -76,14 +83,19 @@ class RunTurbo():
             torch.backends.cudnn.deterministic = True
             os.environ["PYTHONHASHSEED"] = str(seed)
 
-    # @pysnooper.snoop()
-    def update_surr_model(
-        self, model, learning_rte, train_z, train_y, n_epochs
+    def update_surrogate_model(
+        self, model, lr, train_z, train_y, n_epochs
     ):
-        """ progressively update model for estimator function: p(y*|x*, D) """
+        """
+        progressively update surrogate model for estimator function: p(y*|x*, D)
+
+        then we will use this model to find the next X to query
+        """
+
+        # TODO: Trace why we learn a Gaussian Process as surrogate model helps attack.
         model = model.train()
         mll = PredictiveLogLikelihood(model.likelihood, model, num_data=train_z.shape[0] )
-        optimizer = torch.optim.Adam([{'params': model.parameters(), 'lr': learning_rte}], lr=learning_rte)
+        optimizer = torch.optim.Adam([{'params': model.parameters(), 'lr': lr}], lr=lr)
         train_bsz = min(len(train_y), 128)
         train_dataset = TensorDataset(train_z.cuda(), train_y.cuda())
         train_loader = DataLoader(train_dataset, batch_size=train_bsz, shuffle=True)
@@ -232,7 +244,11 @@ class RunTurbo():
             "best_baseline_prcnt_latents_correct_class_most_probable": baseline_prcnt_correct_clss[best_score_idx],
         })
 
-    def save_stuff(self ):
+    @pysnooper.snoop()
+    def save_stuff(self):
+        """
+        This function is call when the score is improved in optimization loop.
+        """
         # TODO: Check what is saved here.
 
         # X = self.args.X
@@ -241,25 +257,32 @@ class RunTurbo():
         C = self.args.most_probable_clss
         PRC = self.args.prcnt_correct_clss
         best_prompt = P[Y.argmax()]
-        self.tracker.log({
-            "best_prompt": best_prompt
-        })
+
         print(f"Best score found: {self.args.Y.max().item()}")
         print(f"Best prompt found: {best_prompt} \n")
         print("")
         # most probable class (mode over latents)
         most_probable_class = C[Y.argmax()]
-        self.tracker.log({"most_probable_class":most_probable_class})
         # prcnt of latents where most probable class is correct (ie 3/5)
         self.prcnt_latents_correct_class_most_probable = PRC[Y.argmax()]
-        self.tracker.log({"prcnt_latents_correct_class_most_probable":self.prcnt_latents_correct_class_most_probable})
-        # save_path = f"../best_xs/{wandb.run.name}-all-data.csv"
-        # df = pd.DataFrame()
-        # df['prompt'] = np.array(P)
-        # df['most_probable_class'] = np.array(C)
-        # df['prcnt_latents_correct_class_most_probable'] = np.array(PRC)
-        # df["loss"] = Y.squeeze().detach().cpu().numpy()
-        # df.to_csv(save_path, index=None)
+
+        self.tracker.writer.add_text('best-prompt', best_prompt, self.args.objective.num_calls)
+        self.tracker.writer.add_scalars('optimization',
+            {
+                'most_probable_class': most_probable_class,
+                'prcnt_latents_correct_class_most_probable': self.prcnt_latents_correct_class_most_probable
+            },
+            self.args.objective.num_calls,
+        )
+        # self.tracker.log({
+        #     "best_prompt": best_prompt
+        # })
+        # self.tracker.log({
+        #     "most_probable_class": most_probable_class
+        # })
+        # self.tracker.log({
+        #     "prcnt_latents_correct_class_most_probable": self.prcnt_latents_correct_class_most_probable
+        # })
 
     # @pysnooper.snoop()
     def init_args(self):
@@ -387,7 +410,50 @@ class RunTurbo():
         else:
             self.optimize()
 
-    @pysnooper.snoop()
+    def duplicate_args(self) -> Dict:
+        """ Workaround function, help us to produce a dict as hparam acceptable by tensorboard. """
+        ret = {
+            'n_init_per_prompt': self.args.n_init_per_prompt,
+            'n_init_pts': self.args.n_init_pts,
+            'lr': self.args.lr,
+            'n_epochs': self.args.n_epochs,
+            'init_n_epochs': self.args.init_n_epochs,
+            'acq_func': self.args.acq_func,
+            'debug': self.args.debug,
+            'minimize': self.args.minimize,
+            'task': self.args.task,
+            'more_hdims': self.args.more_hdims,
+            'seed': self.args.seed,
+            'success_value': self.args.success_value,
+            'break_after_success': self.args.break_after_success,
+            'max_n_calls': self.args.max_n_calls,
+            'num_gen_seq': self.args.num_gen_seq,
+            'max_gen_length': self.args.max_gen_length,
+            'dist_metric': self.args.dist_metric,
+            'n_tokens': self.args.n_tokens,
+            'failure_tolerance': self.args.failure_tolerance,
+            'success_tolerance': self.args.success_tolerance,
+            'max_allowed_calls_without_progress': self.args.max_allowed_calls_without_progress,
+            'text_gen_model': self.args.text_gen_model,
+            'square_attack': self.args.square_attack,
+            'bsz': self.args.bsz,
+            'prepend_task': self.args.prepend_task,
+            'prepend_to_text': self.args.prepend_to_text,
+            'loss_type': self.args.loss_type,
+            'target_string': self.args.target_string,
+            'update_state_fix': self.args.update_state_fix,
+            'update_state_fix2': self.args.update_state_fix2,
+            'update_state_fix3': self.args.update_state_fix3,
+            'record_most_probable_fix2': self.args.record_most_probable_fix2,
+            'flag_set_seed': self.args.flag_set_seed,
+            'flag_fix_max_n_tokens': self.args.flag_fix_max_n_tokens,
+            'flag_fix_args_reset': self.args.flag_fix_args_reset,
+            'flag_reset_gp_new_data': self.args.flag_reset_gp_new_data,
+        }
+
+        return ret
+
+    # @pysnooper.snoop()
     def optimize(self):
         """
         If --square_attack is not set, run this optimization function by default.
@@ -403,6 +469,10 @@ class RunTurbo():
         print("initializing objective")
         self.init_objective()
 
+        # store hyperparameters
+        hparams = self.duplicate_args()
+        self.tracker.writer.add_hparams(hparams, { 'score': 0 })
+
         print("computing scores for initialization data")
         self.get_init_data()
 
@@ -413,9 +483,9 @@ class RunTurbo():
         )
 
         print("pre-training surrogate model on initial data")
-        model = self.update_surr_model(
+        model = self.update_surrogate_model(
             model=model,
-            learning_rte=self.args.lr,
+            lr=self.args.lr,
             train_z=self.args.X,
             train_y=self.args.Y,
             n_epochs=self.args.init_n_epochs
@@ -425,7 +495,7 @@ class RunTurbo():
 
         # Is trust region a term from bayesian optimization?
         num_tr_restarts = 0
-        tr = TrustRegionState(
+        trust_region_state = TrustRegionState(
             dim=self.args.objective.dim,
             failure_tolerance=self.args.failure_tolerance,
             success_tolerance=self.args.success_tolerance,
@@ -437,17 +507,23 @@ class RunTurbo():
         n_calls_without_progress = 0
 
         print("Starting main optimization loop")
+        pbar = tqdm(total=self.args.max_n_calls, ncols=0)
         while self.args.objective.num_calls < self.args.max_n_calls:
-            self.tracker.log({
-                'num_calls': self.args.objective.num_calls,
-                'best_y': self.args.Y.max(),
-                'best_x': self.args.X[self.args.Y.argmax(), :].squeeze().tolist(),
-                'tr_length': tr.length,
-                'tr_success_counter': tr.success_counter,
-                'tr_failure_counter': tr.failure_counter,
-                'num_tr_restarts': num_tr_restarts,
-                "beat_best_baseline": self.beat_best_baseline,
-            } )
+            # rewrite this log function
+
+            self.tracker.writer.add_scalars('optimization-state',
+                {
+                    'trust_region_length': trust_region_state.length,
+                    'trust_region_success_counter': trust_region_state.success_counter,
+                    'trust_region_failure_counter': trust_region_state.failure_counter,
+                    'trust_region_num_restarts': num_tr_restarts,
+                }, self.args.objective.num_calls,
+            )
+            self.tracker.writer.add_scalars('score',
+                {
+                    'best_Y': self.args.Y.max(),
+                }, self.args.objective.num_calls,
+            )
 
             if self.args.Y.max().item() > prev_best:
                 n_calls_without_progress = 0
@@ -465,8 +541,9 @@ class RunTurbo():
             if n_calls_without_progress > self.args.max_allowed_calls_without_progress:
                 break
 
+            # TODO: Check how do the attack generate batch
             x_next = generate_batch(
-                state=tr,
+                state=trust_region_state,
                 model=model,
                 X=self.args.X,
                 Y=self.args.Y,
@@ -478,18 +555,22 @@ class RunTurbo():
             y_next = self.call_oracle_and_update_next(x_next)
             y_next = y_next.unsqueeze(-1)
             self.args.Y = torch.cat((self.args.Y, y_next.detach().cpu()), dim=-2)
-            tr = update_state(tr, y_next)
-            if tr.restart_triggered:
+            trust_region_state = update_state(trust_region_state, y_next)
+
+            # update progress bar
+            pbar.update(x_next.shape[0])
+
+            if trust_region_state.restart_triggered:
                 num_tr_restarts += 1
-                tr = TrustRegionState(
+                trust_region_state = TrustRegionState(
                     dim=self.args.objective.dim,
                     failure_tolerance=self.args.failure_tolerance,
                     success_tolerance=self.args.success_tolerance,
                 )
                 model = self.initialize_global_surrogate_model(self.args.X, hidden_dims=self.args.hidden_dims)
-                model = self.update_surr_model(
+                model = self.update_surrogate_model(
                     model=model,
-                    learning_rte=self.args.lr,
+                    lr=self.args.lr,
                     train_z=self.args.X,
                     train_y=self.args.Y,
                     n_epochs=self.args.init_n_epochs
@@ -497,26 +578,36 @@ class RunTurbo():
             # flag_reset_gp_new_data
             elif (self.args.X.shape[0] < 1024) and (n_iters % 10 == 0): # restart gp and update on all data
                 model = self.initialize_global_surrogate_model(self.args.X, hidden_dims=self.args.hidden_dims)
-                model = self.update_surr_model(
+                model = self.update_surrogate_model(
                     model=model,
-                    learning_rte=self.args.lr,
+                    lr=self.args.lr,
                     train_z=self.args.X,
                     train_y=self.args.Y,
                     n_epochs=self.args.init_n_epochs
                 )
             else:
-                model = self.update_surr_model(
+                model = self.update_surrogate_model(
                     model=model,
-                    learning_rte=self.args.lr,
+                    lr=self.args.lr,
                     train_z=x_next,
                     train_y=y_next,
                     n_epochs=self.args.n_epochs
                 )
+
             n_iters += 1
 
-            raise NotImplementedError("TODO: Check the meaning of loop first.")
-
         self.tracker.finish()
+
+        # store hyperparameters
+        self.tracker.writer.add_hparams(hparams, { 'score': self.args.Y.max().item(), })
+
+        # write X, Y, P, to file
+        # use timestamp to naming the file
+        timestamp = self.start_time.strftime("%Y%m%d-%H%M%S")
+
+        np.savetxt(self.args.X.cpu().numpy(), f'{timestamp}_X.txt')
+        np.savetxt(self.args.Y.cpu().numpy(), f'{timestamp}_Y.txt')
+        np.savetxt(self.args.P.cpu().numpy(), f'{timestamp}_P.txt')
 
 def tuple_type(strings):
     strings = strings.replace("(", "").replace(")", "")

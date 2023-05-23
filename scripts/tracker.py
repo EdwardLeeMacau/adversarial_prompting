@@ -5,6 +5,7 @@ import json
 import numpy as np
 import time
 from typing import Dict
+from torch.utils.tensorboard import SummaryWriter
 
 class Run:
     def __init__(self):
@@ -14,7 +15,7 @@ class Run:
 class Tracker:
     def __init__(self, config: Dict, **kwargs):
         self.config = config
-        # self.run = Run()
+        self.writer = SummaryWriter()
 
     def __repr__(self) -> str:
         print(json.dumps(self.config, indent=2))

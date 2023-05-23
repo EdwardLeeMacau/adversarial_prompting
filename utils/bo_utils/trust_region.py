@@ -25,7 +25,7 @@ class TrustRegionState:
     dim: int
     best_value: float = -float("inf")
     length: float = 1.0 # 0.8
-    length_min: float = 0.5 ** 7
+    length_min: float = 0.5 ** 7        # Need to shrink the trust region 7 times to trigger restart.
     length_max: float = 1.6
     failure_counter: int = 0
     failure_tolerance: int = 32
@@ -38,8 +38,9 @@ class TrustRegionState:
     #         max([4.0 / self.batch_size, float(self.dim ) / self.batch_size])
     #     )
 
-@pysnooper.snoop()
+# @pysnooper.snoop()
 def update_state(state: TrustRegionState, Y_next):
+    # Calculate accumulated success or failure
     if max(Y_next) > state.best_value + 1e-3 * math.fabs(state.best_value):
         state.success_counter += 1
         state.failure_counter = 0
