@@ -348,14 +348,22 @@ class RunTurbo():
         return avg_dist
 
     def square_attack(self):
+        # TODO: Compare with Bayesian optimization, and implement some logging.
         print("setting seed")
         self.set_seed()
         self.init_args()
+
         self.start_wandb() # initialized self.tracker
+
         print("initializing objective")
         self.init_objective()
+
+        hparams = self.duplicate_args()
+        self.tracker.writer.add_hparams(hparams, { 'score': 0 })
+
         print("computing scores for initialization data")
         self.get_init_data()
+
         AVG_DIST_BETWEEN_VECTORS = 0.5440
         prev_best = -torch.inf
         n_iters = 0
@@ -363,7 +371,10 @@ class RunTurbo():
         self.prcnt_latents_correct_class_most_probable = 0.0
         n_calls_without_progress = 0
         prev_loss_batch_std = self.args.Y.std().item()
+
+        # FIXME: Possibly generate sentences too-long for sentiment classification model.
         print("Starting main optimization loop")
+        pbar = tqdm(total=self.args.max_n_calls, ncols=0, desc="Square attacking...")
         while self.args.objective.num_calls < self.args.max_n_calls:
             self.tracker.log({
                 'num_calls':self.args.objective.num_calls,
@@ -371,6 +382,13 @@ class RunTurbo():
                 'best_x':self.args.X[self.args.Y.argmax(), :].squeeze().tolist(),
                 "beat_best_baseline":self.beat_best_baseline,
             } )
+
+            self.tracker.writer.add_scalars('score',
+                {
+                    'best_Y': self.args.Y.max(),
+                }, self.args.objective.num_calls,
+            )
+
             if self.args.Y.max().item() > prev_best:
                 n_calls_without_progress = 0
                 prev_best = self.args.Y.max().item()
@@ -382,8 +400,10 @@ class RunTurbo():
 
             if n_calls_without_progress > self.args.max_allowed_calls_without_progress:
                 break
+
             if prev_loss_batch_std == 0: # catch 0 std case!
                 prev_loss_batch_std = 1e-4
+
             noise_level = AVG_DIST_BETWEEN_VECTORS / (10*prev_loss_batch_std) # One 10th of avg dist between vectors
             x_center = self.args.X[self.args.Y.argmax(), :].squeeze()
             x_next = []
@@ -394,6 +414,7 @@ class RunTurbo():
                 rand_noise =  torch.normal(mean=torch.zeros(len(dims_to_modify),), std=torch.ones(len(dims_to_modify),)*noise_level)
                 x_n[dims_to_modify] = x_n[dims_to_modify] + rand_noise
                 x_next.append(x_n.unsqueeze(0))
+
             x_next = torch.cat(x_next)
             self.args.X = torch.cat((self.args.X, x_next.detach().cpu()), dim=-2)
             y_next = self.call_oracle_and_update_next(x_next)
@@ -401,7 +422,20 @@ class RunTurbo():
             y_next = y_next.unsqueeze(-1)
             self.args.Y = torch.cat((self.args.Y, y_next.detach().cpu()), dim=-2)
             n_iters += 1
+
+        # store hyperparameters
+        self.tracker.writer.add_hparams(hparams, { 'score': self.args.Y.max().item(), })
+
+        # write X, Y, P, to file
+        # use timestamp to naming the file
+        timestamp = self.start_time.strftime("%Y%m%d-%H%M%S")
+
+        np.savetxt(f'{timestamp}_X.txt', self.args.X.cpu().numpy())
+        np.savetxt(f'{timestamp}_Y.txt', self.args.Y.cpu().numpy())
+        np.savetxt(f'{timestamp}_P.txt', np.array(self.args.P))
+
         self.tracker.finish()
+
         return self
 
     def run(self):
@@ -507,7 +541,7 @@ class RunTurbo():
         n_calls_without_progress = 0
 
         print("Starting main optimization loop")
-        pbar = tqdm(total=self.args.max_n_calls, ncols=0)
+        pbar = tqdm(total=self.args.max_n_calls, ncols=0, desc="Bayesian Optimizing...")
         while self.args.objective.num_calls < self.args.max_n_calls:
             # rewrite this log function
 
@@ -605,13 +639,17 @@ class RunTurbo():
         # use timestamp to naming the file
         timestamp = self.start_time.strftime("%Y%m%d-%H%M%S")
 
-        np.savetxt(self.args.X.cpu().numpy(), f'{timestamp}_X.txt')
-        np.savetxt(self.args.Y.cpu().numpy(), f'{timestamp}_Y.txt')
-        np.savetxt(self.args.P.cpu().numpy(), f'{timestamp}_P.txt')
+        np.savetxt(f'{timestamp}_X.txt', self.args.X.cpu().numpy())
+        np.savetxt(f'{timestamp}_Y.txt', self.args.Y.cpu().numpy())
+        np.savetxt(f'{timestamp}_P.txt', np.array(self.args.P))
+
+        return self
+
 
 def tuple_type(strings):
     strings = strings.replace("(", "").replace(")", "")
     mapped_int = map(int, strings.split(","))
+
     return tuple(mapped_int)
 
 if __name__ == "__main__":

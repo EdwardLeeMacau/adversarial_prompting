@@ -205,7 +205,7 @@ if __name__ == "__main__":
 
     # Increase to 10000 to see what will happen when attacker has more attack budgets,
     # default number is 3000.
-    parser.add_argument('--max_n_calls', type=int, default=10000 )
+    parser.add_argument('--max_n_calls', type=int, default=3000 )
     parser.add_argument('--num_gen_seq', type=int, default=5 )
     parser.add_argument('--max_gen_length', type=int, default=20 )
     parser.add_argument('--dist_metric', default="sq_euclidean" )
@@ -214,7 +214,7 @@ if __name__ == "__main__":
     parser.add_argument('--success_tolerance', type=int, default=10 )
 
     # Increased to 3000 to see what will happen without early-stop, default number is 1000.
-    parser.add_argument('--max_allowed_calls_without_progress', type=int, default=10000 ) # for square baseline!
+    parser.add_argument('--max_allowed_calls_without_progress', type=int, default=1000 ) # for square baseline!
     parser.add_argument('--text_gen_model', default="opt" )
     parser.add_argument('--square_attack', type=bool, default=False)
     parser.add_argument('--bsz', type=int, default=10)

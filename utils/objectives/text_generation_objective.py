@@ -153,6 +153,9 @@ class TextGenerationObjective(Objective):
 
     def text_to_loss(self, text): # , loss_type='log_prob_pos')
         if self.loss_type in ['log_prob_pos', 'log_prob_neg']:
+            # for attackers, they want to maximize the probability of the target sentiment.
+            # therefore, when loss approaches to 0, the probability of the target sentiment is 1. (expected)
+            # otherwise, when loss approaches to -inf, the probability of the target sentiment is 0.
             num_prompts = len(text)
             flattened_text = [item for sublist in text for item in sublist]
             inputs = self.distilBert_tokenizer(flattened_text, return_tensors="pt", padding=True)
@@ -166,6 +169,7 @@ class TextGenerationObjective(Objective):
             else:
                 raise ValueError(f"loss_type must be one of ['log_prob_pos', 'log_prob_neg'] but was {self.loss_type}")
             loss = loss.reshape(num_prompts, -1)
+
         elif self.loss_type in ["perc_target", "num_target", "target_occurrences"]: # else: #s if self.loss_type == 'perc_ts':
             n_input = self.n_tokens + self.N_extra_prepend_tokens
             losses = []
