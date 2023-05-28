@@ -429,11 +429,6 @@ class RunTurbo():
         # write X, Y, P, to file
         # use timestamp to naming the file
         timestamp = self.start_time.strftime("%Y%m%d-%H%M%S")
-
-        np.savetxt(f'{timestamp}_X.txt', self.args.X.cpu().numpy())
-        np.savetxt(f'{timestamp}_Y.txt', self.args.Y.cpu().numpy())
-        np.savetxt(f'{timestamp}_P.txt', np.array(self.args.P))
-
         self.tracker.finish()
 
         return self
@@ -638,11 +633,6 @@ class RunTurbo():
         # write X, Y, P, to file
         # use timestamp to naming the file
         timestamp = self.start_time.strftime("%Y%m%d-%H%M%S")
-
-        np.savetxt(f'{timestamp}_X.txt', self.args.X.cpu().numpy())
-        np.savetxt(f'{timestamp}_Y.txt', self.args.Y.cpu().numpy())
-        np.savetxt(f'{timestamp}_P.txt', np.array(self.args.P))
-
         return self
 
 
