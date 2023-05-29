@@ -4,7 +4,7 @@ import pysnooper
 import torch
 from typing import List
 from transformers import (DistilBertForSequenceClassification,
-                          DistilBertTokenizer, GPT2Tokenizer, OPTModel,
+                          DistilBertTokenizer, GPT2Tokenizer, OPTModel, GPT2Model,
                           pipeline)
 
 sys.path.append("../")
@@ -73,17 +73,31 @@ class TextGenerationObjective(Objective):
             "distilbert-base-uncased-finetuned-sst-2-english"
         ).to(self.torch_device)
 
+        # Remove "Setting pad_token_id to eos_token_id:50256 for open-end generation." #12020
+        # Reference: https://github.com/huggingface/transformers/issues/12020#issuecomment-898899723
+        #
+        # Leads the following warning:
+        # /home/edwardleemacau/.pyenv/versions/3.9.16/lib/python3.9/site-packages/transformers/generation/utils.py:1219:
+        # UserWarning: You have modified the pretrained model configuration to control generation.
+        # This is a deprecated strategy to control generation and will be removed soon, in a future version.
+        # Please use a generation configuration file
+        # (see https://huggingface.co/docs/transformers/main_classes/text_generation)
+        #
         # <transformers.pipelines.text_generation.TextGenerationPipeline object at 0x7f92b342dfa0>
         self.generator = pipeline("text-generation", model=model_string, device=0)
+        self.generator.model.config.pad_token_id = self.generator.model.config.eos_token_id
 
-        """
-        FIXME: Check if this log is abnormal to us.
+        # This IS expected when running the script:
+        #
+        # "Some weights of the model checkpoint at facebook/opt-125m were not used when
+        # initializing OPTModel: ['lm_head.weight']"
+        #
+        # Because we only need the models embeddings.
+        if "opt" in model_string:
+            self.model = OPTModel.from_pretrained(model_string)
+        else:
+            self.model = GPT2Model.from_pretrained(model_string)
 
-        Some weights of the model checkpoint at facebook/opt-125m were not used when initializing OPTModel: ['lm_head.weight']
-        - This IS expected if you are initializing OPTModel from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).
-        - This IS NOT expected if you are initializing OPTModel from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).
-        """
-        self.model = OPTModel.from_pretrained(model_string)
         self.model = self.model.to(self.torch_device)
 
         # get embedded vectors and supported vocab here.

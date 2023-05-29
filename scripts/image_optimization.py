@@ -72,6 +72,7 @@ class RunTurbo():
         torch.backends.cuda.matmul.allow_tf32 = False
         # The flag below controls whether to allow TF32 on cuDNN. This flag defaults to True.
         torch.backends.cudnn.allow_tf32 = False
+
         seed = self.args.seed
         if seed is not None:
             torch.manual_seed(seed)
@@ -81,7 +82,10 @@ class RunTurbo():
             torch.cuda.manual_seed_all(seed)
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
+
             os.environ["PYTHONHASHSEED"] = str(seed)
+
+            print(f"setting seed {seed}")
 
     def update_surrogate_model(
         self, model, lr, train_z, train_y, n_epochs
@@ -349,7 +353,6 @@ class RunTurbo():
 
     def square_attack(self):
         # TODO: Compare with Bayesian optimization, and implement some logging.
-        print("setting seed")
         self.set_seed()
         self.init_args()
 
@@ -498,11 +501,11 @@ class RunTurbo():
         If --square_attack is not set, run this optimization function by default.
         """
 
-        print("setting seed")
+        # print("setting seed")
         self.set_seed()
         self.init_args()
 
-        print("starting wandb tracker")
+        # print("starting wandb tracker")
         self.start_wandb() # initialized self.tracker
 
         print("initializing objective")

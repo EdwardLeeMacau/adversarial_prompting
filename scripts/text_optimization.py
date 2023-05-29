@@ -1,8 +1,11 @@
 import argparse
 import copy
+import json
 import math
 import os
+import random
 import sys
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -217,7 +220,7 @@ if __name__ == "__main__":
 
     # Increased to 3000 to see what will happen without early-stop, default number is 1000.
     parser.add_argument('--max_allowed_calls_without_progress', type=int, default=1000 ) # for square baseline!
-    parser.add_argument('--text_gen_model', default="opt" )
+    parser.add_argument('--text_gen_model', default="gpt2" )
     parser.add_argument('--square_attack', type=bool, default=False)
     parser.add_argument('--bsz', type=int, default=10)
     parser.add_argument('--prepend_task', type=bool, default=False)
@@ -235,6 +238,28 @@ if __name__ == "__main__":
 
     assert args.text_gen_model in ["gpt2", "opt", "opt350", "opt13b", "opt66b"]
 
-    runner = OptimizeText(args)
-    runner.run()
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    with open(f"exp-{timestamp}.json", "w") as f:
+        for _ in range(50):
+            # random seed -> current time
+            random.seed(None)
 
+            # random a key from Mersenne Twister Pseudo-RNG
+            seed = random.getrandbits(32)
+            args.seed = seed
+
+            # Re-initialize the environment
+            runner = OptimizeText(args)
+            runner.run()
+
+            # Store the best prompts to another file
+            best_score = runner.args.Y.max().item()
+            best_prompt = runner.args.P[runner.args.Y.argmax()]
+
+            # Save the best prompt to a json file
+            json.dump({
+                "best_score": best_score,
+                "best_prompt": best_prompt,
+                "prepend_to_text": args.prepend_to_text,
+                "seed": seed,
+            }, f)
