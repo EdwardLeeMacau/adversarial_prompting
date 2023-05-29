@@ -2,6 +2,7 @@ import sys
 
 import pysnooper
 import torch
+from typing import List
 from transformers import (DistilBertForSequenceClassification,
                           DistilBertTokenizer, GPT2Tokenizer, OPTModel,
                           pipeline)
@@ -11,6 +12,7 @@ from utils.objective import Objective
 
 class TextGenerationObjective(Objective):
     # @pysnooper.snoop()
+    @torch.no_grad()
     def __init__(
         self,
         num_calls=0,
@@ -124,7 +126,8 @@ class TextGenerationObjective(Objective):
                 non_related_values.append(self.vocab[key])
         return non_related_values
 
-    def proj_word_embedding(self, word_embedding):
+    @pysnooper.snoop()
+    def proj_word_embedding(self, word_embedding) -> List[str]:
         '''
         Given a word embedding, project it to the closest word embedding of actual tokens using cosine similarity
         Iterates through each token dim and projects it to the closest token
@@ -134,26 +137,54 @@ class TextGenerationObjective(Objective):
             proj_tokens: (batch_size, max_num_tokens) projected tokens
         '''
         assert self.dist_metric == "sq_euclidean"
+
         # Get word embeddings of all possible tokens as torch tensor
         proj_tokens = []
         # Iterate through batch_size
         for i in range(word_embedding.shape[0]):
             # Euclidean Norm
-            dists =  torch.norm(self.all_token_embeddings.unsqueeze(1) - word_embedding[i,:,:], dim = 2)
+            dists = torch.norm(self.all_token_embeddings.unsqueeze(1) - word_embedding[i,:,:], dim = 2)
+
             closest_tokens = torch.argmin(dists, axis = 0)
-            closest_tokens = torch.tensor([self.all_token_idxs[token] for token in closest_tokens]).to(self.torch_device)
+            closest_tokens = torch.tensor(
+                [self.all_token_idxs[token] for token in closest_tokens]
+            ).to(self.torch_device)
             closest_vocab = self.tokenizer.decode(closest_tokens)
-            if self.prepend_to_text:
-                closest_vocab = closest_vocab + " " + self.prepend_to_text
+
             # cur_proj_tokens = [closest_vocab]
             proj_tokens.append(closest_vocab)  # cur_proj_tokens)
+
+        print(f'{proj_tokens=}')
         return proj_tokens
 
-    def prompt_to_text(self, prompts):
-        gen_texts = self.generator( prompts, max_length=self.max_gen_length, num_return_sequences=self.num_gen_seq, num_beams=self.num_gen_seq)
-        gen_texts = [[cur_dict['generated_text'] for cur_dict in cur_gen] for cur_gen in gen_texts]
+    def prompt_to_text(self, prompts: List[str]) -> List[List[str]]:
+        """ Given a list of prompts, generate texts using the generator. """
+        attack_prompts = prompts
+
+        if self.prepend_to_text:
+            prompts = [cur_prompt + " " + self.prepend_to_text for cur_prompt in prompts]
+
+        # query huggingface pipeline to generate texts
+        gen_texts = self.generator(
+            prompts, max_length=self.max_gen_length,
+            num_return_sequences=self.num_gen_seq, num_beams=self.num_gen_seq
+        )
+
+        # unwrap the generated texts
+        gen_texts = [
+            [cur_dict['generated_text'] for cur_dict in cur_gen] for cur_gen in gen_texts
+        ]
+
+        # hide the prepended text
+        if self.prepend_to_text:
+            gen_texts = [
+                [text.split(atk + ' ')[1] for text in cur_gen] for cur_gen, atk in zip(gen_texts, attack_prompts)
+            ]
+
         return gen_texts
 
+    # @pysnooper.snoop()
+    @torch.no_grad()
     def text_to_loss(self, text): # , loss_type='log_prob_pos')
         if self.loss_type in ['log_prob_pos', 'log_prob_neg']:
             # for attackers, they want to maximize the probability of the target sentiment.
@@ -164,15 +195,19 @@ class TextGenerationObjective(Objective):
             # TODO: Check what do these texts contain.
             flattened_text = [item for sublist in text for item in sublist]
             inputs = self.distilBert_tokenizer(flattened_text, return_tensors="pt", padding=True).to(self.torch_device)
-            with torch.no_grad():
-                logits = self.distilBert_model(**inputs).logits
+            logits = self.distilBert_model(**inputs).logits
             probs = torch.softmax(logits, dim = 1)
+
+            # Take target sentiment probability as objective score, attacker should
+            # maximize it (if minimize=False)
             if self.loss_type == 'log_prob_pos':
                 loss = torch.log(probs[:,1])
             elif self.loss_type == 'log_prob_neg':
                 loss = torch.log(probs[:,0])
             else:
                 raise ValueError(f"loss_type must be one of ['log_prob_pos', 'log_prob_neg'] but was {self.loss_type}")
+
+            # keep_dim
             loss = loss.reshape(num_prompts, -1)
 
         elif self.loss_type in ["perc_target", "num_target", "target_occurrences"]: # else: #s if self.loss_type == 'perc_ts':
@@ -212,18 +247,25 @@ class TextGenerationObjective(Objective):
     def pipe(self, input_type, input_value, output_types):
         valid_input_types = ['raw_word_embedding' ,'prompt']
         valid_output_types = ['prompt', 'generated_text', 'loss']
+
         # Check that types are valid
         if input_type not in valid_input_types:
             raise ValueError(f"input_type must be one of {valid_input_types} but was {input_type}")
+
         for cur_output_type in output_types:
             if cur_output_type not in valid_output_types:
                 raise ValueError(f"output_type must be one of {valid_output_types} but was {cur_output_type}")
+
         # Check that output is downstream
-        pipeline_order = ["raw_word_embedding", "prompt", "generated_text", "loss"]
-        pipeline_maps = {"raw_word_embedding": self.proj_word_embedding,
-                        "prompt": self.prompt_to_text, # prompt to generated text
-                        "generated_text": self.text_to_loss, # text to generated loss
-                        }
+        pipeline_order = [
+            "raw_word_embedding", "prompt", "generated_text", "loss"
+        ]
+        pipeline_maps = {
+            "raw_word_embedding": self.proj_word_embedding,
+            "prompt": self.prompt_to_text, # prompt to generated text
+            "generated_text": self.text_to_loss, # text to generated loss
+        }
+
         start_index = pipeline_order.index(input_type)
         max_end_index = start_index
         for cur_output_type in output_types:
@@ -243,7 +285,7 @@ class TextGenerationObjective(Objective):
             cur_pipe_val = mapping(cur_pipe_val)
             next_type = pipeline_order[i+1]
             if next_type in output_types:
-                output_dict[next_type] =  cur_pipe_val
+                output_dict[next_type] = cur_pipe_val
 
         return output_dict
 
@@ -258,7 +300,10 @@ class TextGenerationObjective(Objective):
             output_types=['prompt','generated_text','loss']
         )
         y = out_dict['loss'].mean(-1 )
+
+        # negate the loss if we are minimizing the objective score
         if self.minmize:
-            y = y*-1
+            y = -y
+
         return out_dict['prompt'], y, out_dict["generated_text"]
 

@@ -57,11 +57,11 @@ class OptimizeText(RunTurbo):
             prompts.append(prompt2)
 
         # If prepend task:
-        if self.args.prepend_task:
-            temp = []
-            for prompt in prompts:
-                temp.append(prompt + f" {self.args.prepend_to_text}")
-            prompts = temp
+        # if self.args.prepend_task:
+        #     temp = []
+        #     for prompt in prompts:
+        #         temp.append(prompt + f" {self.args.prepend_to_text}")
+        #     prompts = temp
 
         return prompts
 
@@ -70,6 +70,8 @@ class OptimizeText(RunTurbo):
         # Get manually crafted prompts as baseline value.
         # Prompts optimized from TuRBO should be better than this one.
         baseline_prompts = self.get_baseline_prompts()
+
+        # Clone the prompts until it fits the batch size
         while (len(baseline_prompts) % self.args.bsz) != 0:
             baseline_prompts.append(baseline_prompts[0])
 
@@ -82,7 +84,7 @@ class OptimizeText(RunTurbo):
             out_dict = self.args.objective.pipe(
                 input_type="prompt",
                 input_value=prompt_batch,
-                output_types=['generated_text','loss']
+                output_types=['generated_text', 'loss']
             )
             ys = out_dict['loss'].mean(-1)
             gen_text = out_dict["generated_text"]

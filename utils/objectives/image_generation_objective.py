@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import pandas as pd
 import torch
+import pysnooper
 from diffusers import AutoencoderKL, PNDMScheduler, UNet2DConditionModel
 from PIL import Image
 from torchvision import transforms
@@ -478,7 +479,6 @@ class ImageGenerationObjective(Objective):
         word_embeddings = word_embeddings[:, 0:self.n_tokens, :]
 
         return word_embeddings
-
 
     def proj_word_embedding(self, word_embedding):
         '''
