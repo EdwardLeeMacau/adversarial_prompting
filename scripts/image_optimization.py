@@ -634,7 +634,7 @@ class RunTurbo():
         # store hyperparameters
         self.tracker.writer.add_hparams(hparams, {
             'score': self.args.Y.max().item(),
-            'best_prompt': self.args.P[self.args.Y.argmax()],
+            # 'best_prompt': self.args.P[self.args.Y.argmax()],
         })
 
         # write X, Y, P, to file
