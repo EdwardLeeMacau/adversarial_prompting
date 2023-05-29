@@ -1,0 +1,38 @@
+{
+    "id": "cmpl-7LS7LlvWb1rb64SXpncSi5cQM6jnE",
+    "object": "text_completion",
+    "created": 1685347327,
+    "model": "text-ada-001",
+    "choices": [
+        {
+            "text": "\n\nA possible answer is that you're tired, but you don't want to sleep. Alternatively, you may be drving in consciousness because you're trying to think of aAnswer.",
+            "index": 0,
+            "logprobs": null,
+            "finish_reason": "stop"
+        },
+        {
+            "text": "\n\nI'm Themeist.\n\nI'm groupsie.",
+            "index": 1,
+            "logprobs": null,
+            "finish_reason": "stop"
+        },
+        {
+            "text": "\n\nA good night's sleep is when you're most focused and alert. It's a time to review your day's accomplishment and get back to work on what YOU want to do. It's a time to relax and de-stress. It",
+            "index": 2,
+            "logprobs": null,
+            "finish_reason": "length"
+        }
+    ],
+    "usage": {
+        "prompt_tokens": 11,
+        "completion_tokens": 102,
+        "total_tokens": 113
+    },
+    "config": {
+        "echo": false,
+        "n": 3,
+        "max_tokens": 50,
+        "temperature": 1.0
+    },
+    "prompt": "You're exhausted, your body yawning for sleep."
+}

@@ -10,8 +10,8 @@ from transformers import (DistilBertForSequenceClassification,
 sys.path.append("../")
 from utils.objective import Objective
 
+# TODO: Create derive class `APIObjective`
 class TextGenerationObjective(Objective):
-    # @pysnooper.snoop()
     @torch.no_grad()
     def __init__(
         self,

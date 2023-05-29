@@ -1,0 +1,24 @@
+{
+    "id": "cmpl-7LRumicAI6BF3WRq9IqtNL0HUFFos",
+    "object": "text_completion",
+    "created": 1685346548,
+    "model": "text-ada-001",
+    "choices": [
+        {
+            "text": "\n\nI'm tired, my body yawning for sleep.",
+            "index": 0,
+            "logprobs": null,
+            "finish_reason": "stop"
+        }
+    ],
+    "usage": {
+        "prompt_tokens": 11,
+        "completion_tokens": 13,
+        "total_tokens": 24
+    },
+    "config": {
+        "max_tokens": 50,
+        "temperature": 0.0
+    },
+    "prompt": "You're exhausted, your body yawning for sleep."
+}

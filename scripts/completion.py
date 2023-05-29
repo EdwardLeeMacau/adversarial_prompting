@@ -5,25 +5,42 @@ from datetime import datetime
 
 openai.organization = 'org-sDd4QQ3oY8PPgOtLXkBp9iO2'
 openai.api_key = os.getenv('OPENAI_API_KEY')
-response = openai.Model.list()
+# response = openai.Model.list()
 
-engine = "text-davinci-003"
+# Reference:
+#
+# https://platform.openai.com/docs/models/gpt-3-5
+# https://openai.com/pricing
+# https://platform.openai.com/docs/api-reference/completions/create
+
+engine = "text-ada-001"
+# engine = "text-davinci-003"
 prompt = "You're exhausted, your body yawning for sleep."
-config = {
-    "max_tokens": 50,
-    "temperature": 0.0,
-}
 
-# Call API to generate text
-completion = openai.Completion.create(
-    engine=engine, prompt=prompt, **config
-)
+def query_embedding():
+    raise NotImplementedError
 
-print(completion)
+def complete(prompt=prompt):
+    config = {
+        "echo": False,          # Echo back the prompt in addition to the completion
+        "n": 3,                 # Number of possible outputs to generate
+        "max_tokens": 50,       # Maximum tokens per output
+        "temperature": 1.0,     # Randomness of the output
+    }
 
-# write to file
-completion['config'] = config
-completion['prompt'] = prompt
-timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-with open(f'../data/completion/{timestamp}.json', 'w', encoding='utf-8') as f:
-    json.dump(completion, f, ensure_ascii=False, indent=4)
+    # Call API to generate text
+    completion = openai.Completion.create(
+        engine=engine, prompt=prompt, **config
+    )
+
+    print(completion)
+
+    # write to file
+    completion['config'] = config
+    completion['prompt'] = prompt
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    with open(f'../data/completion/{timestamp}.json', 'w', encoding='utf-8') as f:
+        json.dump(completion, f, ensure_ascii=False, indent=4)
+
+if __name__ == '__main__':
+    complete()
