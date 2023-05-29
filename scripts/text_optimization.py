@@ -161,7 +161,7 @@ class OptimizeText(RunTurbo):
         #     "best_gen_text": best_gen_text
         # })
 
-        # self.tracker.writer.add_text('best-prompt', best_prompt, self.args.objective.num_calls)
+        self.tracker.writer.add_text('best-prompt', best_prompt, self.args.objective.num_calls)
         self.tracker.writer.add_text('adversarial',
             '  \n'.join(best_gen_text), self.args.objective.num_calls
         )

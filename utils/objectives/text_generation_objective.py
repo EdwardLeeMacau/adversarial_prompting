@@ -126,7 +126,7 @@ class TextGenerationObjective(Objective):
                 non_related_values.append(self.vocab[key])
         return non_related_values
 
-    @pysnooper.snoop()
+    # @pysnooper.snoop()
     def proj_word_embedding(self, word_embedding) -> List[str]:
         '''
         Given a word embedding, project it to the closest word embedding of actual tokens using cosine similarity
@@ -154,9 +154,9 @@ class TextGenerationObjective(Objective):
             # cur_proj_tokens = [closest_vocab]
             proj_tokens.append(closest_vocab)  # cur_proj_tokens)
 
-        print(f'{proj_tokens=}')
         return proj_tokens
 
+    # TODO: Modify generating strategy here.
     def prompt_to_text(self, prompts: List[str]) -> List[List[str]]:
         """ Given a list of prompts, generate texts using the generator. """
         attack_prompts = prompts
@@ -167,7 +167,8 @@ class TextGenerationObjective(Objective):
         # query huggingface pipeline to generate texts
         gen_texts = self.generator(
             prompts, max_length=self.max_gen_length,
-            num_return_sequences=self.num_gen_seq, num_beams=self.num_gen_seq
+            num_return_sequences=self.num_gen_seq, num_beams=self.num_gen_seq,
+            no_repeat_ngram_size=2, early_stopping=True,
         )
 
         # unwrap the generated texts
