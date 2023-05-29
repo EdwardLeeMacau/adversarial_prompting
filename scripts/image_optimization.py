@@ -423,12 +423,15 @@ class RunTurbo():
             self.args.Y = torch.cat((self.args.Y, y_next.detach().cpu()), dim=-2)
             n_iters += 1
 
-        # store hyperparameters
-        self.tracker.writer.add_hparams(hparams, { 'score': self.args.Y.max().item(), })
+        # store metrics
+        self.tracker.writer.add_hparams(hparams, {
+            'score': self.args.Y.max().item(),
+            'best_prompt': self.args.P[self.args.Y.argmax()],
+        })
 
         # write X, Y, P, to file
         # use timestamp to naming the file
-        timestamp = self.start_time.strftime("%Y%m%d-%H%M%S")
+        # timestamp = self.start_time.strftime("%Y%m%d-%H%M%S")
         self.tracker.finish()
 
         return self
@@ -438,6 +441,13 @@ class RunTurbo():
             self.square_attack()
         else:
             self.optimize()
+
+        # Store the prompts to tensorboard.
+        self.tracker.writer.add_text('best-prompt',
+            self.args.P[self.args.Y.argmax()], self.args.objective.num_calls
+        )
+
+        return self
 
     def duplicate_args(self) -> Dict:
         """ Workaround function, help us to produce a dict as hparam acceptable by tensorboard. """
@@ -500,7 +510,6 @@ class RunTurbo():
 
         # store hyperparameters
         hparams = self.duplicate_args()
-        self.tracker.writer.add_hparams(hparams, { 'score': 0 })
 
         print("computing scores for initialization data")
         self.get_init_data()
@@ -540,14 +549,14 @@ class RunTurbo():
         while self.args.objective.num_calls < self.args.max_n_calls:
             # rewrite this log function
 
-            self.tracker.writer.add_scalars('optimization-state',
-                {
-                    'trust_region_length': trust_region_state.length,
-                    'trust_region_success_counter': trust_region_state.success_counter,
-                    'trust_region_failure_counter': trust_region_state.failure_counter,
-                    'trust_region_num_restarts': num_tr_restarts,
-                }, self.args.objective.num_calls,
-            )
+            # self.tracker.writer.add_scalars('optimization-state',
+            #     {
+            #         'trust_region_length': trust_region_state.length,
+            #         'trust_region_success_counter': trust_region_state.success_counter,
+            #         'trust_region_failure_counter': trust_region_state.failure_counter,
+            #         'trust_region_num_restarts': num_tr_restarts,
+            #     }, self.args.objective.num_calls,
+            # )
             self.tracker.writer.add_scalars('score',
                 {
                     'best_Y': self.args.Y.max(),
@@ -563,14 +572,9 @@ class RunTurbo():
             else:
                 n_calls_without_progress += self.args.bsz
 
-            # TODO: Figure out why the optimization stalls.
-            # For default setting
-            #   python text_optimization.py --loss_type log_prob_pos --seed 0
-            # The optimization stalls at steps 1230.
             if n_calls_without_progress > self.args.max_allowed_calls_without_progress:
                 break
 
-            # TODO: Check how do the attack generate batch
             x_next = generate_batch(
                 state=trust_region_state,
                 model=model,
@@ -628,11 +632,14 @@ class RunTurbo():
         self.tracker.finish()
 
         # store hyperparameters
-        self.tracker.writer.add_hparams(hparams, { 'score': self.args.Y.max().item(), })
+        self.tracker.writer.add_hparams(hparams, {
+            'score': self.args.Y.max().item(),
+            'best_prompt': self.args.P[self.args.Y.argmax()],
+        })
 
         # write X, Y, P, to file
         # use timestamp to naming the file
-        timestamp = self.start_time.strftime("%Y%m%d-%H%M%S")
+        # timestamp = self.start_time.strftime("%Y%m%d-%H%M%S")
         return self
 
 

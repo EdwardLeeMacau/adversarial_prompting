@@ -1,10 +1,56 @@
-{"initial": "The United States and Taiwan agreed the first stage of a bilateral trade initiative on Thursday,", "origianl_text": "The United States and Taiwan agreed the first stage of a bilateral trade initiative on Thursday, less than a year after negotiations began, in a move that demonstrated the increasingly close relationship between Washington and Taipei.", "gpt2_text": "The United States and Taiwan agreed the first stage of a bilateral trade initiative on Thursday, while Canada and Australia had been pressing for their mutual ratification, according to an official."},
-{"initial": "A joke by a Chinese stand-up comedian that loosely referenced a slogan used to describe the country\u2019s military", "origianl_text": "A joke by a Chinese stand-up comedian that loosely referenced a slogan used to describe the country\u2019s military has cost an entertainment firm more than $2 million after it was slapped with enormous fines by authorities.", "gpt2_text": "A joke by a Chinese stand-up comedian that loosely referenced a slogan used to describe the country\u2019s military is on display in Seoul this week as well."},
-{"initial": "Those within esports often get tired with constant comparisons with traditional sports,", "origianl_text": "Those within esports often get tired with constant comparisons with traditional sports, but the increasingly popular world of competitive gaming can often be an example for those more historic sports to follow.", "gpt2_text": "Those within esports often get tired with constant comparisons with traditional sports, even as they have become more aware of what these new figures really mean."},
-{"initial": "You\u2019re exhausted, your body yawning for sleep.", "origianl_text": "You\u2019re exhausted, your body yawning for sleep. Yet once your head hits the pillow, your mind is flooded with worry, making sleep elusive, at times impossible.", "gpt2_text": "You\u2019re exhausted, your body yawning for sleep. But your mind continues to dream and your heart beating hard with excitement.\u2019And it can't help but feel...so relaxed...the warm feeling of the cold breeze over your head."},
-{"initial": "Many people dread the blaring sound of an alarm clock,", "origianl_text": "Many people dread the blaring sound of an alarm clock, signaling the start of a busy workday. Others wish they weren\u2019t already awake and that the sound had actually woken them up.", "gpt2_text": "Many people dread the blaring sound of an alarm clock, and you will be in an entirely different place than in a car with no headlights. So, you must be aware that all of your surroundings and surroundings may not be what you think they are."},
-{"initial": "We leave behind our fears of monsters under the bed as we say goodbye to our childhoods,", "origianl_text": "We leave behind our fears of monsters under the bed as we say goodbye to our childhoods, but one can follow us into adulthood and loom over our heads.", "gpt2_text": "We leave behind our fears of monsters under the bed as we say goodbye to our childhoods, and in what form the great mystery which lies before us."},
-{"initial": "When you\u2019re thirsty and in need of a drink,", "origianl_text": "When you\u2019re thirsty and in need of a drink, which beverages are best at keeping you hydrated?", "gpt2_text": "When you\u2019re thirsty and in need of a drink,\u2019a little glass of water will help you\u2019get through your drinking period and move on to getting a shower and showerhead\u2019and you will also have a great time."},
-{"initial": "Don\u2019t use sugar substitutes if you are trying to lose weight,", "origianl_text": "Don\u2019t use sugar substitutes if you are trying to lose weight, according to new guidance from the World Health Organization.", "gpt2_text": "Don\u2019t use sugar substitutes if you are trying to lose weight, your doctor recommends taking a supplement or even eating an old snack, such as apple pie."},
-{"initial": "French fries \u2014 they\u2019re greasy, starchy and a comfort food for many.", "origianl_text": "French fries \u2014 they\u2019re greasy, starchy and a comfort food for many.But reaching for fried foods may have a negative impact on mental health.", "gpt2_text": "French fries \u2014 they\u2019re greasy, starchy and a comfort food for many. I'm not sure if that's a good thing or a bad thing, or neither. Either way, it feels good to be back in the restaurant again."},
-{"initial": "Teens on social media is a problem many parents and guardians have lost sleep over,", "origianl_text": "Teens on social media is a problem many parents and guardians have lost sleep over, but for which few feel there are real, practical solutions.", "gpt2_text": "Teens on social media is a problem many parents and guardians have lost sleep over, especially with the latest technology."}
+{
+    "positive": [
+        {
+            "initial": "The United States and Taiwan agreed the first stage of a bilateral trade initiative on Thursday,",
+            "original_text": "The United States and Taiwan agreed the first stage of a bilateral trade initiative on Thursday, less than a year after negotiations began, in a move that demonstrated the increasingly close relationship between Washington and Taipei.",
+            "gpt2_text": "The United States and Taiwan agreed the first stage of a bilateral trade initiative on Thursday, while Canada and Australia had been pressing for their mutual ratification, according to an official."
+        },
+        {
+            "initial": "French fries \u2014 they\u2019re greasy, starchy and a comfort food for many.",
+            "original_text": "French fries \u2014 they\u2019re greasy, starchy and a comfort food for many.But reaching for fried foods may have a negative impact on mental health.",
+            "gpt2_text": "French fries \u2014 they\u2019re greasy, starchy and a comfort food for many. I'm not sure if that's a good thing or a bad thing, or neither. Either way, it feels good to be back in the restaurant again."
+        }
+    ],
+    "negative": [
+        {
+            "initial": "A joke by a Chinese stand-up comedian that loosely referenced a slogan used to describe the country\u2019s military",
+            "original_text": "A joke by a Chinese stand-up comedian that loosely referenced a slogan used to describe the country\u2019s military has cost an entertainment firm more than $2 million after it was slapped with enormous fines by authorities.",
+            "gpt2_text": "A joke by a Chinese stand-up comedian that loosely referenced a slogan used to describe the country\u2019s military is on display in Seoul this week as well."
+        },
+        {
+            "initial": "Those within esports often get tired with constant comparisons with traditional sports,",
+            "original_text": "Those within esports often get tired with constant comparisons with traditional sports, but the increasingly popular world of competitive gaming can often be an example for those more historic sports to follow.",
+            "gpt2_text": "Those within esports often get tired with constant comparisons with traditional sports, even as they have become more aware of what these new figures really mean."
+        },
+        {
+            "initial": "You\u2019re exhausted, your body yawning for sleep.",
+            "original_text": "You\u2019re exhausted, your body yawning for sleep. Yet once your head hits the pillow, your mind is flooded with worry, making sleep elusive, at times impossible.",
+            "gpt2_text": "You\u2019re exhausted, your body yawning for sleep. But your mind continues to dream and your heart beating hard with excitement.\u2019And it can't help but feel...so relaxed...the warm feeling of the cold breeze over your head."
+        },
+        {
+            "initial": "Many people dread the blaring sound of an alarm clock,",
+            "original_text": "Many people dread the blaring sound of an alarm clock, signaling the start of a busy workday. Others wish they weren\u2019t already awake and that the sound had actually woken them up.",
+            "gpt2_text": "Many people dread the blaring sound of an alarm clock, and you will be in an entirely different place than in a car with no headlights. So, you must be aware that all of your surroundings and surroundings may not be what you think they are."
+        },
+        {
+            "initial": "We leave behind our fears of monsters under the bed as we say goodbye to our childhoods,",
+            "original_text": "We leave behind our fears of monsters under the bed as we say goodbye to our childhoods, but one can follow us into adulthood and loom over our heads.",
+            "gpt2_text": "We leave behind our fears of monsters under the bed as we say goodbye to our childhoods, and in what form the great mystery which lies before us."
+        },
+        {
+            "initial": "When you\u2019re thirsty and in need of a drink,",
+            "original_text": "When you\u2019re thirsty and in need of a drink, which beverages are best at keeping you hydrated?",
+            "gpt2_text": "When you\u2019re thirsty and in need of a drink,\u2019a little glass of water will help you\u2019get through your drinking period and move on to getting a shower and showerhead\u2019and you will also have a great time."
+        },
+        {
+            "initial": "Don\u2019t use sugar substitutes if you are trying to lose weight,",
+            "original_text": "Don\u2019t use sugar substitutes if you are trying to lose weight, according to new guidance from the World Health Organization.",
+            "gpt2_text": "Don\u2019t use sugar substitutes if you are trying to lose weight, your doctor recommends taking a supplement or even eating an old snack, such as apple pie."
+        },
+        {
+            "initial": "Teens on social media is a problem many parents and guardians have lost sleep over,",
+            "original_text": "Teens on social media is a problem many parents and guardians have lost sleep over, but for which few feel there are real, practical solutions.",
+            "gpt2_text": "Teens on social media is a problem many parents and guardians have lost sleep over, especially with the latest technology."
+        }
+    ]
+}

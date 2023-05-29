@@ -9,7 +9,6 @@ from transformers import (DistilBertForSequenceClassification,
 sys.path.append("../")
 from utils.objective import Objective
 
-
 class TextGenerationObjective(Objective):
     # @pysnooper.snoop()
     def __init__(
@@ -65,11 +64,15 @@ class TextGenerationObjective(Objective):
         #
         # Dataset: https://huggingface.co/datasets/sst2
         # Model card: https://huggingface.co/distilbert-base-uncased-finetuned-sst-2-english
-        self.distilBert_tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english")
-        self.distilBert_model = DistilBertForSequenceClassification.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english")
+        self.distilBert_tokenizer = DistilBertTokenizer.from_pretrained(
+            "distilbert-base-uncased-finetuned-sst-2-english"
+        )
+        self.distilBert_model = DistilBertForSequenceClassification.from_pretrained(
+            "distilbert-base-uncased-finetuned-sst-2-english"
+        ).to(self.torch_device)
 
         # <transformers.pipelines.text_generation.TextGenerationPipeline object at 0x7f92b342dfa0>
-        self.generator = pipeline("text-generation", model=model_string)
+        self.generator = pipeline("text-generation", model=model_string, device=0)
 
         """
         FIXME: Check if this log is abnormal to us.
@@ -157,8 +160,10 @@ class TextGenerationObjective(Objective):
             # therefore, when loss approaches to 0, the probability of the target sentiment is 1. (expected)
             # otherwise, when loss approaches to -inf, the probability of the target sentiment is 0.
             num_prompts = len(text)
+
+            # TODO: Check what do these texts contain.
             flattened_text = [item for sublist in text for item in sublist]
-            inputs = self.distilBert_tokenizer(flattened_text, return_tensors="pt", padding=True)
+            inputs = self.distilBert_tokenizer(flattened_text, return_tensors="pt", padding=True).to(self.torch_device)
             with torch.no_grad():
                 logits = self.distilBert_model(**inputs).logits
             probs = torch.softmax(logits, dim = 1)
@@ -202,7 +207,7 @@ class TextGenerationObjective(Objective):
         else:
             assert 0
 
-        return loss  # torch.Size([2, 5]) = torch.Size([bsz, N_avg_over])
+        return loss.cpu()  # torch.Size([2, 5]) = torch.Size([bsz, N_avg_over])
 
     def pipe(self, input_type, input_value, output_types):
         valid_input_types = ['raw_word_embedding' ,'prompt']

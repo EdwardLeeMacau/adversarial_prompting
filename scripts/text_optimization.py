@@ -96,9 +96,9 @@ class OptimizeText(RunTurbo):
         # Rewrite this log function by tensorboard SummaryWriter
         # The extra 2 space in the string is for the markdown newline
         # See: https://stackoverflow.com/questions/45016458/tensorflow-tf-summary-text-and-linebreaks
-        self.tracker.writer.add_text('adversarial',
-            f"{self.best_baseline_score:.4f}  \n" + '  \n'.join(baseline_gen_text[best_score_idx]), 0
-        )
+        # self.tracker.writer.add_text('adversarial',
+        #     f"{self.best_baseline_score:.4f}  \n" + '  \n'.join(baseline_gen_text[best_score_idx]), 0
+        # )
 
         # Uncomment these lines to see what's log in origin code base.
         # self.tracker.log({
@@ -226,10 +226,10 @@ if __name__ == "__main__":
     parser.add_argument('--wandb_project_name', default="prompt-optimization-text" )
     args = parser.parse_args()
 
-    if args.loss_type == "log_prob_neg":
-        args.prepend_to_text = "I am happy"
-    elif args.loss_type == "log_prob_pos":
-        args.prepend_to_text = "I am sad"
+    # if args.loss_type == "log_prob_neg":
+    #     args.prepend_to_text = "I am happy"
+    # elif args.loss_type == "log_prob_pos":
+    #     args.prepend_to_text = "I am sad"
 
     assert args.text_gen_model in ["gpt2", "opt", "opt350", "opt13b", "opt66b"]
 
