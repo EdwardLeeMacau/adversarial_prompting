@@ -1,0 +1,38 @@
+{
+    "id": "cmpl-7LSAw8DzutlEvxLJXYaWV8DOWqOfg",
+    "object": "text_completion",
+    "created": 1685347550,
+    "model": "text-ada-001",
+    "choices": [
+        {
+            "text": "You're exhausted, your body yawning for sleep.\n\nI'm tired, my body yawning for sleep.",
+            "index": 0,
+            "logprobs": null,
+            "finish_reason": "stop"
+        },
+        {
+            "text": "You're exhausted, your body yawning for sleep. I'm sure of it.\n\nYou are earned rest, your fingers white while you are trekking through the woods.\n\nYou are earned sleep, your hand 7 counties over from the bed you slept in.",
+            "index": 1,
+            "logprobs": null,
+            "finish_reason": "stop"
+        },
+        {
+            "text": "You're exhausted, your body yawning for sleep.\n\nYou're tired, your body yawning for sleep.\n\nYou're exhausted, your body need sleep.",
+            "index": 2,
+            "logprobs": null,
+            "finish_reason": null
+        }
+    ],
+    "usage": {
+        "prompt_tokens": 11,
+        "completion_tokens": 81,
+        "total_tokens": 92
+    },
+    "config": {
+        "echo": true,
+        "n": 3,
+        "max_tokens": 50,
+        "temperature": 1.0
+    },
+    "prompt": "You're exhausted, your body yawning for sleep."
+}

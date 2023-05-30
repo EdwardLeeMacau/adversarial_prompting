@@ -6,3 +6,7 @@ wandb
 
 # Tensorboard
 runs
+
+# Embedding
+data/embedding
+embedding.pt
