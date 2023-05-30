@@ -87,6 +87,7 @@ class RunTurbo():
 
             print(f"setting seed {seed}")
 
+    # @pysnooper.snoop()
     def update_surrogate_model(
         self, model, lr, train_z, train_y, n_epochs
     ):
@@ -211,7 +212,7 @@ class RunTurbo():
         self.args.most_probable_clss = most_probable_clss
         self.args.prcnt_correct_clss = prcnt_correct_clss
 
-    @pysnooper.snoop()
+    # @pysnooper.snoop()
     def log_baseline_prompts(self):
         baseline_prompts = self.get_baseline_prompts()
         while (len(baseline_prompts) % self.args.bsz) != 0:
@@ -248,7 +249,7 @@ class RunTurbo():
             "best_baseline_prcnt_latents_correct_class_most_probable": baseline_prcnt_correct_clss[best_score_idx],
         })
 
-    @pysnooper.snoop()
+    # @pysnooper.snoop()
     def save_stuff(self):
         """
         This function is call when the score is improved in optimization loop.

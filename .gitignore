@@ -10,3 +10,7 @@ runs
 # Embedding
 data/embedding
 embedding.pt
+
+# Experiment result
+completion
+completion.*
