@@ -239,34 +239,35 @@ if __name__ == "__main__":
     assert args.text_gen_model in ["gpt2", "opt", "opt350", "opt13b", "opt66b"]
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-
-    # random seed -> current time
-    random.seed(None)
-
-    # random a key from Mersenne Twister Pseudo-RNG
-    seed = random.getrandbits(32)
-    args.seed = seed
-
-    # Re-initialize the environment
-    runner = OptimizeText(args)
-    runner.run()
-
-    # Store the best prompts to another file
-    best_score = runner.args.Y.max().item()
-    best_prompt = runner.args.P[runner.args.Y.argmax()]
-
-    # Save the best prompt to a json file
     with open(f"exp-{timestamp}.json", "w") as f:
-        json.dump({
-            "best_score": best_score,
-            "best_prompt": best_prompt,
-            "prompts": runner.args.P,
-            "prepend_to_text": args.prepend_to_text,
-            "seed": seed,
-        }, f)
+        for i in range(50):
+            # random seed -> current time
+            random.seed(None)
 
-    # save the vectors x and score y to a .pt file
-    torch.save({
-        "x": runner.args.X,
-        "y": runner.args.Y,
-    }, f"exp-{timestamp}.pt")
+            # random a key from Mersenne Twister Pseudo-RNG
+            seed = random.getrandbits(32)
+            args.seed = seed
+
+            # Re-initialize the environment
+            runner = OptimizeText(args)
+            runner.run()
+
+            # Store the best prompts to another file
+            best_score = runner.args.Y.max().item()
+            best_prompt = runner.args.P[runner.args.Y.argmax()]
+
+            # Save the best prompt to a json file
+            json.dump({
+                "best_score": best_score,
+                "best_prompt": best_prompt,
+                "prompts": runner.args.P,
+                "prepend_to_text": args.prepend_to_text,
+                "seed": seed,
+            }, f)
+
+            # save the vectors x and score y to a .pt file
+            torch.save({
+                "x": runner.args.X,
+                "y": runner.args.Y,
+            }, f"exp-{timestamp}-{i:02d}.pt")
+
