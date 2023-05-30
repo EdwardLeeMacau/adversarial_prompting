@@ -576,6 +576,7 @@ class RunTurbo():
             else:
                 n_calls_without_progress += self.args.bsz
 
+            # No improvement for a long time, break.
             if n_calls_without_progress > self.args.max_allowed_calls_without_progress:
                 break
 
@@ -596,6 +597,15 @@ class RunTurbo():
 
             # update progress bar
             pbar.update(x_next.shape[0])
+            pbar.set_postfix({
+                'best_score': prev_best,
+            })
+
+            # early stop if a prompt can generate target sentiment sentences with
+            # 99% confidence, under beam search strategy.
+            if np.exp(prev_best) > 0.99:
+                pbar.write("Found a good enough prompt, stopping.")
+                break
 
             if trust_region_state.restart_triggered:
                 num_tr_restarts += 1
