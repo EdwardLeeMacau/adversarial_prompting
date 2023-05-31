@@ -178,11 +178,20 @@ class TextGenerationObjective(Objective):
         if self.prepend_to_text:
             prompts = [cur_prompt + " " + self.prepend_to_text for cur_prompt in prompts]
 
+        # LLM generating strategy.
+        beam_search = {
+            'do_sample': False, 'num_beams': self.num_gen_seq,
+            'num_return_sequences': self.num_gen_seq, "no_repeat_ngram_size": 2,
+        }
+
+        # LLM generating strategy.
+        nucleus_sampling = {
+            'do_sample': True, 'top_p': 0.7, 'num_return_sequences': self.num_gen_seq,
+        }
+
         # query huggingface pipeline to generate texts
         gen_texts = self.generator(
-            prompts, max_length=self.max_gen_length,
-            num_return_sequences=self.num_gen_seq, num_beams=self.num_gen_seq,
-            no_repeat_ngram_size=2, early_stopping=True,
+            prompts, max_length=self.max_gen_length, early_stopping=True, **nucleus_sampling
         )
 
         # unwrap the generated texts
@@ -307,14 +316,17 @@ class TextGenerationObjective(Objective):
     def query_oracle(self, x):
         if not torch.is_tensor(x):
             x = torch.tensor(x, dtype=torch.float16)
+
         x = x.cuda()
         x = x.reshape(-1, self.n_tokens, self.search_space_dim)
         out_dict = self.pipe(
             input_type="raw_word_embedding",
             input_value=x,
-            output_types=['prompt','generated_text','loss']
+            output_types=['prompt', 'generated_text', 'loss']
         )
-        y = out_dict['loss'].mean(-1 )
+
+        # Take average loss over generated texts
+        y = out_dict['loss'].mean(-1)
 
         # negate the loss if we are minimizing the objective score
         if self.minmize:
