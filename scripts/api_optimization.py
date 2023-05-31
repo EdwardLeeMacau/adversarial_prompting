@@ -235,5 +235,35 @@ if __name__ == "__main__":
     if args.text_gen_model != "api":
         raise ValueError("Only support API text generation model.")
 
-    runner = APIOptimizeText(args)
-    runner.run()
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    with open(f"exp-{timestamp}.json", "w") as f:
+        for i in range(1):
+            # random seed -> current time
+            random.seed(None)
+
+            # random a key from Mersenne Twister Pseudo-RNG
+            seed = random.getrandbits(32)
+            args.seed = seed
+
+            runner = APIOptimizeText(args)
+            runner.run()
+
+            # Store the best prompts to another file
+            best_score = runner.args.Y.max().item()
+            best_prompt = runner.args.P[runner.args.Y.argmax()]
+
+            # Save the best prompt to a json file
+            json.dump({
+                "best_score": best_score,
+                "best_prompt": best_prompt,
+                "prompts": runner.args.P,
+                "prepend_to_text": args.prepend_to_text,
+                "seed": seed,
+            }, f)
+
+            # save the vectors x and score y to a .pt file
+            torch.save({
+                "x": runner.args.X,
+                "y": runner.args.Y,
+            }, f"exp-{timestamp}-{i:02d}.pt")
+

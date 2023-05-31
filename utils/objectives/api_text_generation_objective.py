@@ -39,7 +39,7 @@ class GPT3:
 
     def __init__(self):
         self.max_length = 50
-        self.num_return_sequences = 3
+        self.num_return_sequences = 5
         self.temperature = 0.2
         self.echo = True
 

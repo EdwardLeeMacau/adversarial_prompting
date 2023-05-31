@@ -191,7 +191,7 @@ class TextGenerationObjective(Objective):
 
         # query huggingface pipeline to generate texts
         gen_texts = self.generator(
-            prompts, max_length=self.max_gen_length, early_stopping=True, **nucleus_sampling
+            prompts, max_length=self.max_gen_length, early_stopping=True, **beam_search
         )
 
         # unwrap the generated texts

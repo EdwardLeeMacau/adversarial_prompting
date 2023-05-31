@@ -239,7 +239,13 @@ if __name__ == "__main__":
     assert args.text_gen_model in ["gpt2", "opt", "opt350", "opt13b", "opt66b"]
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    with open(f"exp-{timestamp}.json", "w") as f:
+    abbrev = f"-{args.prepend_to_text.replace(' ', '')[:2]}" if args.prepend_to_text else ""
+    root = '/tmp2/edwardlee/checkpoints/adversarial_prompting'
+    root = os.path.join(root, f'{timestamp}{abbrev}')
+
+    os.makedirs(root, exist_ok=True)
+
+    with open(os.path.join(root, f"exp-{timestamp}.json"), "w") as f:
         for i in range(50):
             # random seed -> current time
             random.seed(None)
@@ -261,13 +267,17 @@ if __name__ == "__main__":
                 "best_score": best_score,
                 "best_prompt": best_prompt,
                 "prompts": runner.args.P,
+                "scores": runner.args.Y.tolist(),
                 "prepend_to_text": args.prepend_to_text,
                 "seed": seed,
             }, f)
+
+            # Flush the buffer to disk
+            f.flush()
 
             # save the vectors x and score y to a .pt file
             torch.save({
                 "x": runner.args.X,
                 "y": runner.args.Y,
-            }, f"exp-{timestamp}-{i:02d}.pt")
+            }, os.path.join(root, f"{i:08d}.pt"))
 

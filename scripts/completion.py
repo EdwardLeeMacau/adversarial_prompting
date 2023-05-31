@@ -22,7 +22,7 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 
 engine = "text-ada-001"
 # engine = "text-davinci-003"
-prompt = "You're exhausted, your body yawning for sleep."
+prompt = "A joke by a Chinese stand-up comedian that loosely referenced a slogan used to describe the country's military,"
 
 # Reference:
 #
@@ -58,9 +58,9 @@ def query_embedding(words: List[str]):
 def complete(prompt=prompt):
     config = {
         "echo": True,           # Echo back the prompt in addition to the completion
-        "n": 3,                 # Number of possible outputs to generate
+        "n": 5,                 # Number of possible outputs to generate
         "max_tokens": 50,       # Maximum tokens per output
-        "temperature": 1.0,     # Randomness of the output
+        "temperature": 0.0,     # Randomness of the output
     }
 
     # Call API to generate text
@@ -101,4 +101,5 @@ def download_embedding():
     torch.save(embedding, '../data/embedding.pt')
 
 if __name__ == '__main__':
-    download_embedding()
+    # download_embedding()
+    complete()

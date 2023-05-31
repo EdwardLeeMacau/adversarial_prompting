@@ -175,8 +175,8 @@ def evaluate():
         plt.clf()
 
     # User defined prompt.
-    prompt = "When you're thirsty and in need of a drink,"
-    prepend = " to On by that"
+    prompt = "A joke by a Chinese stand-up comedian that loosely referenced a slogan used to describe the country's military"
+    prepend = " 96 this I relatively"
 
     # Evaluate the baseline.
     prob = baseline(prompt)
