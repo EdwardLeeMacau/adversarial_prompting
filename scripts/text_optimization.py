@@ -130,7 +130,7 @@ class OptimizeText(RunTurbo):
 
         # if do batches of more than 10, get OOM
         n_batches = math.ceil(self.args.n_init_pts / self.args.bsz)
-        for ix in range(n_batches):
+        for _ in range(n_batches):
             X = torch.randn(self.args.bsz, self.args.objective.dim) * 0.01
             XS.append(X)
 
@@ -193,6 +193,10 @@ class OptimizeText(RunTurbo):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+
+    # In init_args(),
+    # n_init_pts = bsz * n_init_per_prompt = 100,
+    #                    n_init_per_prompt = 10,
     parser.add_argument('--n_init_per_prompt', type=int, default=None )
     parser.add_argument('--n_init_pts', type=int, default=None)
     parser.add_argument('--lr', type=float, default=0.01 )

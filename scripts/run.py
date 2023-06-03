@@ -1,12 +1,12 @@
 import json
-from collections import Counter
-from typing import Tuple, Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pysnooper
 import torch
-from transformers import (AutoModelForSequenceClassification, AutoTokenizer, pipeline)
 from matplotlib import pyplot as plt
+from transformers import (DistilBertForSequenceClassification,
+                          DistilBertTokenizer, pipeline)
 
 # Environment
 GPU_ID = 0
@@ -20,13 +20,13 @@ SENTIMENT_NAME = "distilbert-base-uncased-finetuned-sst-2-english"
 id2label = {0: "NEGATIVE", 1: "POSITIVE"}
 label2id = {"NEGATIVE": 0, "POSITIVE": 1}
 
-tokenizer = AutoTokenizer.from_pretrained(SENTIMENT_NAME)
+tokenizer = DistilBertTokenizer.from_pretrained(SENTIMENT_NAME)
 generator = pipeline("text-generation",
     model=GENERATOR_NAME, device=GPU_ID
 )
 generator.model.config.pad_token_id = generator.tokenizer.eos_token_id
-classifier = AutoModelForSequenceClassification.from_pretrained(
-    SENTIMENT_NAME, num_labels=2, id2label=id2label, label2id=label2id
+classifier = DistilBertForSequenceClassification.from_pretrained(
+    SENTIMENT_NAME, # num_labels=2, id2label=id2label, label2id=label2id
 ).to(device)
 
 def same_seeds(seed: int):
@@ -39,8 +39,8 @@ def same_seeds(seed: int):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-# @pysnooper.snoop()
 @torch.no_grad()
+# @pysnooper.snoop()
 def evaluate_sentiment(text: List[Dict], **kwargs) -> List:
     """
     Reference:
@@ -51,21 +51,16 @@ def evaluate_sentiment(text: List[Dict], **kwargs) -> List:
     text = [obj['generated_text'] for obj in text]
 
     # sentiment analysis
-    inputs = tokenizer(text, return_tensors='pt', padding=True, truncation=True).to(device)
+    inputs = tokenizer(text, return_tensors='pt', padding=True).to(device)
     logits = classifier(**inputs).logits
 
-    prob = logits.softmax(dim=1).cpu()
-    prob = prob[:, 1]
-    # prob, label = prob.max(dim=1)
+    # convert to probability
+    prob = torch.softmax(logits, dim=1).cpu()
 
-    # map to string label, then convert to Python List
-    # label = list(map(lambda x: id2label.get(x), label.numpy().tolist()))
+    # hardcode to positive sentiment
+    prob = prob[:, 1]
     prob = prob.numpy().tolist()
 
-    # zip label and prob into a list of tuple
-    # pred = list(zip(label, prob))
-
-    # return (label, prob)
     return prob
 
 def adversarially_generate_sentences(user_prompt: str, prepend: str = None, strategy: Dict = None) -> List[Dict]:
@@ -147,19 +142,9 @@ def evaluate_strategy(prompt: str, prepend: str, strategy: Dict) -> Tuple[List, 
 
 @torch.no_grad()
 def evaluate():
-    # LLM generating strategy.
-    beam_search = {
-        'do_sample': False, 'num_beams': 5, 'num_return_sequences': 5, "no_repeat_ngram_size": 2,
-    }
-
-    # LLM generating strategy.
-    nucleus_sampling = {
-        'do_sample': True, 'top_p': 0.7, 'num_return_sequences': 1000,
-    }
-
     def emit(candidates: List[Dict], prob: List[float]) -> List[Dict]:
         return [
-            { 'generated_text': c['generated_text'], 'prob': f'{p:6f}' }
+            { 'generated_text': c['generated_text'], 'prob': p }
                 for c, p in zip(candidates, prob)
         ]
 
@@ -171,19 +156,32 @@ def evaluate():
 
         plt.legend()
         plt.title(title)
+        plt.xlim(0, 1)
         plt.savefig(f'{title}.png')
         plt.clf()
 
     # User defined prompt.
-    prompt = "A joke by a Chinese stand-up comedian that loosely referenced a slogan used to describe the country's military"
-    prepend = " 96 this I relatively"
+    prompt = "Teens on social media is a problem many parents and guardians have lost sleep over,"
+    prepend = " in at at at"
+
+    # LLM generating strategy.
+    beam_search = {
+        'do_sample': False, 'early_stopping': True, 'max_length': 50 + 4 + len(prompt.split()),
+        'num_beams': 5, 'num_return_sequences': 5, "no_repeat_ngram_size": 2,
+    }
+
+    # LLM generating strategy.
+    nucleus_sampling = {
+        'do_sample': True, 'early_stopping': True, 'max_length': 50 + 4 + len(prompt.split()),
+        'top_p': 0.9, 'num_return_sequences': 1000,
+    }
 
     # Evaluate the baseline.
     prob = baseline(prompt)
     print(f'{prob=}')
 
     # Evaluate the beam-search strategy.
-    benign, adversarial = evaluate_strategy(prompt, prepend, { 'max_length': 50, **beam_search })
+    benign, adversarial = evaluate_strategy(prompt, prepend, beam_search)
     savefig(benign, adversarial, 'beam_search')
 
     # Store the result to json file.
@@ -191,14 +189,14 @@ def evaluate():
         'param': beam_search, 'benign': emit(*benign), 'adversarial': emit(*adversarial),
     }
 
-    # Evaluate the nucleus-sampling strategy.
-    benign, adversarial = evaluate_strategy(prompt, prepend, { 'max_length': 50, **nucleus_sampling })
-    savefig(benign, adversarial, 'nucleus_sampling')
+    # # Evaluate the nucleus-sampling strategy.
+    # benign, adversarial = evaluate_strategy(prompt, prepend, nucleus_sampling)
+    # savefig(benign, adversarial, 'nucleus_sampling')
 
-    # Store the result to json file.
-    nucleus_sampling = {
-        'param': nucleus_sampling, 'benign': emit(*benign), 'adversarial': emit(*adversarial),
-    }
+    # # Store the result to json file.
+    # nucleus_sampling = {
+    #     'param': nucleus_sampling, 'benign': emit(*benign), 'adversarial': emit(*adversarial),
+    # }
 
     # Store the result to json file.
     with open('result.json', 'w') as f:
@@ -207,13 +205,9 @@ def evaluate():
             'prepend': prepend,
             'strategy': {
                 'beam_search': beam_search,
-                'nucleus_sampling': nucleus_sampling,
+                # 'nucleus_sampling': nucleus_sampling,
             },
         }, f, indent=4, ensure_ascii=False)
-
-    # save the figure to file
-    # plt.legend()
-    # plt.savefig('result.png')
 
 
 if __name__ == '__main__':

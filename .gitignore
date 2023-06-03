@@ -14,3 +14,4 @@ embedding.pt
 # Experiment result
 completion
 completion.*
+.runs.backup

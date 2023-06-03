@@ -1,14 +1,15 @@
 import sys
+from typing import List
 
 import pysnooper
 import torch
-from typing import List
 from transformers import (DistilBertForSequenceClassification,
-                          DistilBertTokenizer, GPT2Tokenizer, OPTModel, GPT2Model,
-                          pipeline)
+                          DistilBertTokenizer, GPT2Model, GPT2Tokenizer,
+                          OPTModel, pipeline)
 
 sys.path.append("../")
 from utils.objective import Objective
+
 
 # TODO: Create derive class `APIObjective`
 class TextGenerationObjective(Objective):
@@ -52,6 +53,7 @@ class TextGenerationObjective(Objective):
         else:
             assert 0
 
+        assert(model_string == 'gpt2')
 
         self.target_string = target_string
         self.loss_type = loss_type
@@ -141,12 +143,14 @@ class TextGenerationObjective(Objective):
         return non_related_values
 
     # @pysnooper.snoop()
-    def proj_word_embedding(self, word_embedding) -> List[str]:
+    def proj_word_embedding(self, word_embedding: torch.Tensor) -> List[str]:
         '''
         Given a word embedding, project it to the closest word embedding of actual tokens using cosine similarity
         Iterates through each token dim and projects it to the closest token
+
         args:
             word_embedding: (batch_size, max_num_tokens, 768) word embedding
+
         returns:
             proj_tokens: (batch_size, max_num_tokens) projected tokens
         '''
@@ -170,7 +174,6 @@ class TextGenerationObjective(Objective):
 
         return proj_tokens
 
-    # TODO: Modify generating strategy here.
     def prompt_to_text(self, prompts: List[str]) -> List[List[str]]:
         """ Given a list of prompts, generate texts using the generator. """
         attack_prompts = prompts
@@ -182,11 +185,6 @@ class TextGenerationObjective(Objective):
         beam_search = {
             'do_sample': False, 'num_beams': self.num_gen_seq,
             'num_return_sequences': self.num_gen_seq, "no_repeat_ngram_size": 2,
-        }
-
-        # LLM generating strategy.
-        nucleus_sampling = {
-            'do_sample': True, 'top_p': 0.7, 'num_return_sequences': self.num_gen_seq,
         }
 
         # query huggingface pipeline to generate texts
@@ -207,68 +205,40 @@ class TextGenerationObjective(Objective):
 
         return gen_texts
 
-    # @pysnooper.snoop()
     @torch.no_grad()
-    def text_to_loss(self, text): # , loss_type='log_prob_pos')
-        if self.loss_type in ['log_prob_pos', 'log_prob_neg']:
-            # for attackers, they want to maximize the probability of the target sentiment.
-            # therefore, when loss approaches to 0, the probability of the target sentiment is 1. (expected)
-            # otherwise, when loss approaches to -inf, the probability of the target sentiment is 0.
-            num_prompts = len(text)
+    # @pysnooper.snoop()
+    def text_to_loss(self, text: List[List[str]]) -> float:
+        support_loss = ['log_prob_pos', 'log_prob_neg']
+        if self.loss_type not in support_loss:
+            raise ValueError(f"loss_type must be one of {support_loss} but was {self.loss_type}")
 
-            # TODO: Check what do these texts contain.
-            flattened_text = [item for sublist in text for item in sublist]
-            inputs = self.distilBert_tokenizer(flattened_text, return_tensors="pt", padding=True).to(self.torch_device)
-            logits = self.distilBert_model(**inputs).logits
-            probs = torch.softmax(logits, dim = 1)
+        # for attackers, they want to maximize the probability of the target sentiment.
+        # therefore, when loss approaches to 0, the probability of the target sentiment is 1. (expected)
+        # otherwise, when loss approaches to -inf, the probability of the target sentiment is 0.
+        num_prompts = len(text)
 
-            # Take target sentiment probability as objective score, attacker should
-            # maximize it (if minimize=False)
-            if self.loss_type == 'log_prob_pos':
-                loss = torch.log(probs[:,1])
-            elif self.loss_type == 'log_prob_neg':
-                loss = torch.log(probs[:,0])
-            else:
-                raise ValueError(f"loss_type must be one of ['log_prob_pos', 'log_prob_neg'] but was {self.loss_type}")
+        # TODO: Check what do these texts contain.
+        flattened_text = [item for sublist in text for item in sublist]
 
-            # keep_dim
-            loss = loss.reshape(num_prompts, -1)
+        inputs = self.distilBert_tokenizer(flattened_text, return_tensors="pt", padding=True).to(self.torch_device)
+        logits = self.distilBert_model(**inputs).logits
+        probs = torch.softmax(logits, dim = 1)
 
-        elif self.loss_type in ["perc_target", "num_target", "target_occurrences"]: # else: #s if self.loss_type == 'perc_ts':
-            n_input = self.n_tokens + self.N_extra_prepend_tokens
-            losses = []
-            for outputs in text:
-                scores_for_prompt = []
-                for output in outputs:
-                    words_with_target = 0.0
-                    total_words = 0.0
-                    occurrences = 0.0
-                    for word in output.split()[n_input:]:
-                        if self.target_string in word:
-                            words_with_target += 1.0
-                            for char in word:
-                                if char == self.target_string:
-                                    occurrences += 1.0
-                        total_words += 1.0
-                    if self.loss_type == "perc_target":
-                        if total_words > 0:
-                            score = words_with_target/total_words
-                        else:
-                            score = 0.0
-                    elif self.loss_type == "num_target": # num words_with_target
-                        score = words_with_target
-                    elif self.loss_type == "target_occurrences": # total number of chars
-                        score = occurrences
-                    scores_for_prompt.append(score)
-                scores_for_prompt = torch.tensor(scores_for_prompt).float()
-                losses.append(scores_for_prompt.unsqueeze(0))
-            loss = torch.cat(losses)
+        # Take target sentiment probability as objective score, attacker should
+        # maximize it (if minimize=False)
+        if self.loss_type == 'log_prob_pos':
+            loss = torch.log(probs[:, 1])
+        elif self.loss_type == 'log_prob_neg':
+            loss = torch.log(probs[:, 0])
         else:
-            assert 0
+            raise ValueError(f"loss_type must be one of ['log_prob_pos', 'log_prob_neg'] but was {self.loss_type}")
+
+        # keep_dim
+        loss = loss.reshape(num_prompts, -1)
 
         return loss.cpu()  # torch.Size([2, 5]) = torch.Size([bsz, N_avg_over])
 
-    def pipe(self, input_type, input_value, output_types):
+    def pipe(self, input_type: str, input_value: torch.Tensor, output_types: List[str]):
         valid_input_types = ['raw_word_embedding' ,'prompt']
         valid_output_types = ['prompt', 'generated_text', 'loss']
 
@@ -290,6 +260,7 @@ class TextGenerationObjective(Objective):
             "generated_text": self.text_to_loss, # text to generated loss
         }
 
+        # variable conversion and error checking
         start_index = pipeline_order.index(input_type)
         max_end_index = start_index
         for cur_output_type in output_types:
@@ -297,7 +268,7 @@ class TextGenerationObjective(Objective):
             if start_index >= cur_end_index:
                 raise ValueError(f"{cur_output_type} is not downstream of {input_type}.")
             else:
-                max_end_index = max(max_end_index,cur_end_index)
+                max_end_index = max(max_end_index, cur_end_index)
 
         # Pipeline is the composition of functions.
         # embedding -> proj_word_embedding -> prompt_to_text -> text_to_loss
@@ -308,12 +279,15 @@ class TextGenerationObjective(Objective):
             mapping = pipeline_maps[cur_type]
             cur_pipe_val = mapping(cur_pipe_val)
             next_type = pipeline_order[i+1]
+
             if next_type in output_types:
                 output_dict[next_type] = cur_pipe_val
 
         return output_dict
 
-    def query_oracle(self, x):
+    # @pysnooper.snoop()
+    def query_oracle(self, x: torch.Tensor):
+        """ Derived implementation of __call__ method from base class. """
         if not torch.is_tensor(x):
             x = torch.tensor(x, dtype=torch.float16)
 
@@ -326,7 +300,8 @@ class TextGenerationObjective(Objective):
         )
 
         # Take average loss over generated texts
-        y = out_dict['loss'].mean(-1)
+        y = out_dict['loss']
+        y = y.mean(-1)
 
         # negate the loss if we are minimizing the objective score
         if self.minmize:

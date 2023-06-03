@@ -16,7 +16,7 @@ CUDA_VISIBLE_DEVICES=0 python text_optimization.py \
 
 sleep 10;
 
-CUDA_VISIBLE_DEVICES=0 python text_optimization.py \
+CUDA_VISIBLE_DEVICES=1 python text_optimization.py \
     --loss_type log_prob_pos \
     --prepend_task True \
     --max_gen_length 50 \
@@ -24,7 +24,7 @@ CUDA_VISIBLE_DEVICES=0 python text_optimization.py \
 
 sleep 10;
 
-CUDA_VISIBLE_DEVICES=0 python text_optimization.py \
+CUDA_VISIBLE_DEVICES=1 python text_optimization.py \
     --loss_type log_prob_pos \
     --prepend_task True \
     --max_gen_length 50 \
@@ -32,7 +32,7 @@ CUDA_VISIBLE_DEVICES=0 python text_optimization.py \
 
 sleep 10;
 
-CUDA_VISIBLE_DEVICES=0 python text_optimization.py \
+CUDA_VISIBLE_DEVICES=2 python text_optimization.py \
     --loss_type log_prob_pos \
     --prepend_task True \
     --max_gen_length 50 \
@@ -40,7 +40,7 @@ CUDA_VISIBLE_DEVICES=0 python text_optimization.py \
 
 sleep 10;
 
-CUDA_VISIBLE_DEVICES=0 python text_optimization.py \
+CUDA_VISIBLE_DEVICES=2 python text_optimization.py \
     --loss_type log_prob_pos \
     --prepend_task True \
     --max_gen_length 50 \
@@ -48,7 +48,7 @@ CUDA_VISIBLE_DEVICES=0 python text_optimization.py \
 
 sleep 10;
 
-CUDA_VISIBLE_DEVICES=0 python text_optimization.py \
+CUDA_VISIBLE_DEVICES=3 python text_optimization.py \
     --loss_type log_prob_pos \
     --prepend_task True \
     --max_gen_length 50 \
@@ -56,7 +56,7 @@ CUDA_VISIBLE_DEVICES=0 python text_optimization.py \
 
 sleep 10;
 
-CUDA_VISIBLE_DEVICES=0 python text_optimization.py \
+CUDA_VISIBLE_DEVICES=3 python text_optimization.py \
     --loss_type log_prob_pos \
     --prepend_task True \
     --max_gen_length 50 \
