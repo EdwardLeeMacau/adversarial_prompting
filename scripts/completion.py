@@ -6,11 +6,12 @@ from typing import List
 
 import numpy as np
 import openai
+import tiktoken
 import torch
 from torch.nn import Embedding
 from tqdm import tqdm, trange
 
-openai.organization = 'org-sDd4QQ3oY8PPgOtLXkBp9iO2'
+openai.organization = 'org-ghlHp7yuXkkpPdB66B6gbmeJ'
 openai.api_key = os.getenv('OPENAI_API_KEY')
 # response = openai.Model.list()
 
@@ -55,15 +56,18 @@ def query_embedding(words: List[str]):
 
     return response
 
-def complete(prompt=prompt):
+def complete(prompt: str = prompt):
+    encoding = tiktoken.encoding_for_model(engine)
+
     config = {
         "echo": True,           # Echo back the prompt in addition to the completion
-        "n": 5,                 # Number of possible outputs to generate
+        "n": 1,                 # Number of possible outputs to generate
         "max_tokens": 50,       # Maximum tokens per output
         "temperature": 0.0,     # Randomness of the output
     }
 
     # Call API to generate text
+    # prompt: List[int] = encoding.encode(prompt)
     completion = openai.Completion.create(
         engine=engine, prompt=prompt, **config
     )
@@ -102,4 +106,6 @@ def download_embedding():
 
 if __name__ == '__main__':
     # download_embedding()
-    complete()
+    prepend = " 22 at 10 get"
+    prompt = "Teens on social media is a problem many parents and guardians have lost sleep over,"
+    complete(prompt)

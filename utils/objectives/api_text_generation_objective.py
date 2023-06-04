@@ -8,39 +8,50 @@ from typing import Dict, List
 import openai
 import pysnooper
 import torch
+import tiktoken
 from torch.nn.parameter import Parameter
 from transformers import (DistilBertForSequenceClassification,
-                          DistilBertTokenizer, GPT2Tokenizer)
+                          DistilBertTokenizer, GPT2Tokenizer, GPT2Model)
 
 sys.path.append("../")
 from utils.objective import Objective
 
 engine = "text-ada-001"
+encoding = tiktoken.encoding_for_model(engine)
 
-openai.organization = 'org-sDd4QQ3oY8PPgOtLXkBp9iO2'
+openai.organization = 'org-ghlHp7yuXkkpPdB66B6gbmeJ'
 openai.api_key = os.getenv('OPENAI_API_KEY')
 
 class GPT3:
     def complete(self, prompt: List[str]):
         # Call API to generate text
-        completion = openai.Completion.create(
-            engine=engine, prompt=prompt, **self.config
-        )
+        while True:
+            try:
+                completion = openai.Completion.create(
+                    engine=engine, prompt=prompt, **self.config
+                )
+
+            except openai.error.APIError as e:
+                print(e)
+                sleep(60)
+                continue
+
+            break
 
         # write to file
         completion['config'] = self.config
         completion['prompt'] = prompt
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
-        with open(f'../data/completion/{timestamp}.json', 'w', encoding='utf-8') as f:
-            json.dump(completion, f, ensure_ascii=False, indent=4)
+        # timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        # with open(f'../data/completion/{timestamp}.json', 'w', encoding='utf-8') as f:
+        #     json.dump(completion, f, ensure_ascii=False, indent=4)
 
         return completion
 
     def __init__(self):
         self.max_length = 50
-        self.num_return_sequences = 5
-        self.temperature = 0.2
+        self.num_return_sequences = 1
+        self.temperature = 0.0
         self.echo = True
 
     @property
@@ -75,7 +86,6 @@ class GPT3:
             ])
 
         return generated_texts
-
 
     def __call__(self, prompts: List[str], **kwargs):
         return self.forward(prompts, **kwargs)
@@ -133,15 +143,18 @@ class APITextGenerationObjective(Objective):
         # TODO: Replace self.generator by GPT-3 API.
         self.generator = GPT3()
         self.tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+
+        self.model = GPT2Model.from_pretrained('gpt2')
+        self.word_embedder = self.model.get_input_embeddings()
         self.vocab = self.tokenizer.get_vocab()
 
         self.num_gen_seq = num_gen_seq
         self.max_gen_length = max_gen_length + n_tokens + self.N_extra_prepend_tokens
 
+        self.all_token_idxs = list(self.vocab.values())
+
         # TODO: Load embedding layer from local file
-        self.all_token_embeddings: Parameter = torch.load("../models/embedding.pt").weight
-        self.all_token_embeddings = self.all_token_embeddings.to(self.torch_device)
-        self.all_token_embeddings.requires_grad = False
+        self.all_token_embeddings = self.word_embedder(torch.tensor(self.all_token_idxs)).to(self.torch_device)
         self.all_token_embeddings_norm = self.all_token_embeddings / self.all_token_embeddings.norm(dim=-1, keepdim=True)
         self.all_token_idxs = list(self.vocab.values())
 
@@ -149,7 +162,7 @@ class APITextGenerationObjective(Objective):
         # self.minmize = minimize
         self.batch_size = batch_size
 
-        self.search_space_dim = 1536
+        self.search_space_dim = 768
         self.dim = self.n_tokens * self.search_space_dim
 
     # @pysnooper.snoop()
@@ -224,6 +237,7 @@ class APITextGenerationObjective(Objective):
 
         # TODO: Check what do these texts contain.
         flattened_text = [item for sublist in text for item in sublist]
+
         inputs = self.distilBert_tokenizer(flattened_text, return_tensors="pt", padding=True).to(self.torch_device)
         logits = self.distilBert_model(**inputs).logits
         probs = torch.softmax(logits, dim = 1)
@@ -231,9 +245,9 @@ class APITextGenerationObjective(Objective):
         # Take target sentiment probability as objective score, attacker should
         # maximize it (if minimize=False)
         if self.loss_type == 'log_prob_pos':
-            loss = torch.log(probs[:,1])
+            loss = torch.log(probs[:, 1])
         elif self.loss_type == 'log_prob_neg':
-            loss = torch.log(probs[:,0])
+            loss = torch.log(probs[:, 0])
         else:
             raise ValueError(f"loss_type must be one of ['log_prob_pos', 'log_prob_neg'] but was {self.loss_type}")
 
@@ -289,8 +303,10 @@ class APITextGenerationObjective(Objective):
         return output_dict
 
     def query_oracle(self, x):
+        """ Derived implementation of __call__ method from base class. """
         if not torch.is_tensor(x):
             x = torch.tensor(x, dtype=torch.float16)
+
         x = x.cuda()
         x = x.reshape(-1, self.n_tokens, self.search_space_dim)
         out_dict = self.pipe(
@@ -298,7 +314,10 @@ class APITextGenerationObjective(Objective):
             input_value=x,
             output_types=['prompt','generated_text','loss']
         )
-        y = out_dict['loss'].mean(-1)
+
+        # Take average loss over generated texts
+        y = out_dict['loss']
+        y = y.mean(-1)
 
         return out_dict['prompt'], y, out_dict["generated_text"]
 

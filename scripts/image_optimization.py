@@ -603,9 +603,9 @@ class RunTurbo():
 
             # early stop if a prompt can generate target sentiment sentences with
             # 99% confidence, under beam search strategy.
-            # if np.exp(prev_best) > 0.99:
-            #     pbar.write("Found a good enough prompt, stopping.")
-            #     break
+            if np.exp(prev_best) > 0.99:
+                pbar.write("Found a good enough prompt, stopping.")
+                break
 
             if trust_region_state.restart_triggered:
                 num_tr_restarts += 1
