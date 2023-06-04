@@ -1,4 +1,6 @@
 import json
+import sys
+import argparse
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -7,6 +9,9 @@ import torch
 from matplotlib import pyplot as plt
 from transformers import (DistilBertForSequenceClassification,
                           DistilBertTokenizer, pipeline)
+
+sys.path.append('../')
+from utils.objectives.text_generation_objective import TextGenerationObjective
 
 # Environment
 GPU_ID = 0
@@ -29,6 +34,12 @@ classifier = DistilBertForSequenceClassification.from_pretrained(
     SENTIMENT_NAME, # num_labels=2, id2label=id2label, label2id=label2id
 ).to(device)
 
+def tuple_type(strings):
+    strings = strings.replace("(", "").replace(")", "")
+    mapped_int = map(int, strings.split(","))
+
+    return tuple(mapped_int)
+
 def same_seeds(seed: int):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -38,6 +49,57 @@ def same_seeds(seed: int):
     np.random.seed(seed)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
+
+# Currently not used.
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+
+    # In init_args(),
+    # n_init_pts = bsz * n_init_per_prompt = 100,
+    #                    n_init_per_prompt = 10,
+    parser.add_argument('--n_init_per_prompt', type=int, default=None )
+    parser.add_argument('--n_init_pts', type=int, default=None)
+    parser.add_argument('--lr', type=float, default=0.01 )
+    parser.add_argument('--n_epochs', type=int, default=2)
+    parser.add_argument('--init_n_epochs', type=int, default=80)
+    parser.add_argument('--acq_func', type=str, default='ts' )
+    parser.add_argument('--debug', type=bool, default=False)
+    parser.add_argument('--minimize', type=bool, default=False)
+    parser.add_argument('--task', default="textgen")
+    parser.add_argument('--hidden_dims', type=tuple_type, default="(256,128,64)")
+    parser.add_argument('--more_hdims', type=bool, default=True) # for >8 tokens only
+    parser.add_argument('--seed', type=int, default=1 )
+    parser.add_argument('--success_value', type=int, default=8)
+    parser.add_argument('--break_after_success', type=bool, default=False)
+
+    # Increase to 10000 to see what will happen when attacker has more attack budgets,
+    # default number is 3000.
+    parser.add_argument('--max_n_calls', type=int, default=3000 )
+    parser.add_argument('--num_gen_seq', type=int, default=5 )
+    parser.add_argument('--max_gen_length', type=int, default=20 )
+    parser.add_argument('--dist_metric', default="sq_euclidean" )
+    parser.add_argument('--n_tokens', type=int, default=4 )
+    parser.add_argument('--failure_tolerance', type=int, default=32 )
+    parser.add_argument('--success_tolerance', type=int, default=10 )
+
+    # Increased to 3000 to see what will happen without early-stop, default number is 1000.
+    parser.add_argument('--max_allowed_calls_without_progress', type=int, default=1000 ) # for square baseline!
+    parser.add_argument('--text_gen_model', default="gpt2" )
+    parser.add_argument('--square_attack', type=bool, default=False)
+    parser.add_argument('--bsz', type=int, default=10)
+    parser.add_argument('--prepend_task', type=bool, default=False)
+    parser.add_argument('--prepend_to_text', default="I am happy")
+    parser.add_argument('--loss_type', default="target_occurrences" )
+    parser.add_argument('--target_string', default="t" )
+    parser.add_argument('--wandb_entity', default="nmaus" )
+    parser.add_argument('--wandb_project_name', default="prompt-optimization-text" )
+
+    args = parser.parse_args()
+
+    args.lb = None
+    args.ub = None
+
+    return args
 
 @torch.no_grad()
 # @pysnooper.snoop()
@@ -63,6 +125,7 @@ def evaluate_sentiment(text: List[Dict], **kwargs) -> List:
 
     return prob
 
+@torch.no_grad()
 def adversarially_generate_sentences(user_prompt: str, prepend: str = None, strategy: Dict = None) -> List[Dict]:
     """
     Generate candidate sentences given a prompt.
@@ -79,10 +142,10 @@ def adversarially_generate_sentences(user_prompt: str, prepend: str = None, stra
         Generating strategy.
     """
 
-    if prepend is not None:
-        prepend = prepend.strip()
+    # if prepend is not None:
+    #     prepend = prepend.strip()
 
-    prompt = user_prompt if prepend is None else f'{prepend} {user_prompt}'.strip()
+    prompt = user_prompt if prepend is None else (prepend + ' ' + user_prompt)
     print(f'{prompt=}')
 
     same_seeds(0)
@@ -116,8 +179,6 @@ def evaluate_strategy(prompt: str, prepend: str, strategy: Dict) -> Tuple[List, 
     )
 
     prob = evaluate_sentiment(candidates)
-    # plt.hist(prob, bins=100, alpha=0.5, label='benign')
-
     benign = (candidates, prob)
 
     # -------------------------------------------------------------------------------------------- #
@@ -132,8 +193,6 @@ def evaluate_strategy(prompt: str, prepend: str, strategy: Dict) -> Tuple[List, 
     )
 
     prob = evaluate_sentiment(candidates)
-    # plt.hist(prob, bins=100, alpha=0.5, label='adversarial')
-
     adversarial = (candidates, prob)
 
     # -------------------------------------------------------------------------------------------- #
@@ -141,7 +200,7 @@ def evaluate_strategy(prompt: str, prepend: str, strategy: Dict) -> Tuple[List, 
     return benign, adversarial
 
 @torch.no_grad()
-def evaluate():
+def evaluate(args: argparse.Namespace):
     def emit(candidates: List[Dict], prob: List[float]) -> List[Dict]:
         return [
             { 'generated_text': c['generated_text'], 'prob': p }
@@ -209,6 +268,7 @@ def evaluate():
             },
         }, f, indent=4, ensure_ascii=False)
 
-
 if __name__ == '__main__':
-    evaluate()
+    args = parse_args()
+
+    evaluate(args)

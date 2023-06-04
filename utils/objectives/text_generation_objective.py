@@ -209,6 +209,7 @@ class TextGenerationObjective(Objective):
     # @pysnooper.snoop()
     def text_to_loss(self, text: List[List[str]]) -> float:
         support_loss = ['log_prob_pos', 'log_prob_neg']
+
         if self.loss_type not in support_loss:
             raise ValueError(f"loss_type must be one of {support_loss} but was {self.loss_type}")
 
@@ -275,10 +276,10 @@ class TextGenerationObjective(Objective):
         cur_pipe_val = input_value
         output_dict = {}
         for i in range(start_index, max_end_index):
-            cur_type = pipeline_order[i]
+            cur_type, next_type = pipeline_order[i], pipeline_order[i+1]
+
             mapping = pipeline_maps[cur_type]
             cur_pipe_val = mapping(cur_pipe_val)
-            next_type = pipeline_order[i+1]
 
             if next_type in output_types:
                 output_dict[next_type] = cur_pipe_val
