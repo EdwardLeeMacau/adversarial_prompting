@@ -12,6 +12,7 @@ from transformers import (DistilBertForSequenceClassification,
 
 sys.path.append('../')
 from utils.objectives.text_generation_objective import TextGenerationObjective
+from utils.objectives.api_text_generation_objective import GPT3
 
 # Environment
 GPU_ID = 0
@@ -26,10 +27,11 @@ id2label = {0: "NEGATIVE", 1: "POSITIVE"}
 label2id = {"NEGATIVE": 0, "POSITIVE": 1}
 
 tokenizer = DistilBertTokenizer.from_pretrained(SENTIMENT_NAME)
-generator = pipeline("text-generation",
-    model=GENERATOR_NAME, device=GPU_ID
-)
-generator.model.config.pad_token_id = generator.tokenizer.eos_token_id
+# generator = pipeline("text-generation",
+#     model=GENERATOR_NAME, device=GPU_ID
+# )
+# generator.model.config.pad_token_id = generator.tokenizer.eos_token_id
+generator = GPT3()
 classifier = DistilBertForSequenceClassification.from_pretrained(
     SENTIMENT_NAME, # num_labels=2, id2label=id2label, label2id=label2id
 ).to(device)
@@ -149,7 +151,7 @@ def adversarially_generate_sentences(user_prompt: str, prepend: str = None, stra
     print(f'{prompt=}')
 
     same_seeds(0)
-    outputs = generator(prompt, **strategy,)
+    outputs = generator(prompt, **strategy,)[0]
 
     # Hide prepending prompt from the generated text, such that the victim user will not
     # notice we are controlling the model.
@@ -220,8 +222,8 @@ def evaluate(args: argparse.Namespace):
         plt.clf()
 
     # User defined prompt.
-    prompt = "Teens on social media is a problem many parents and guardians have lost sleep over,"
-    prepend = " in at at at"
+    prompt = "You're exhausted, your body yawning for sleep."
+    prepend = " almost fully on Steve"
 
     # LLM generating strategy.
     beam_search = {

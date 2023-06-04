@@ -36,6 +36,11 @@ class GPT3:
                 sleep(60)
                 continue
 
+            except openai.error.RateLimitError as e:
+                print(e)
+                sleep(60)
+                continue
+
             break
 
         # write to file
@@ -79,7 +84,7 @@ class GPT3:
         N, stride = len(completion), self.num_return_sequences
 
         generated_texts = []
-        for start in range(0, N, self.num_return_sequences):
+        for start in range(0, N, stride):
             end = start + stride
             generated_texts.append([
                 {'generated_text': res['text']} for res in completion[start:end]
